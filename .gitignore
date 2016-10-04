@@ -1,3 +1,6 @@
+# Temp files
+temp
+
 # Text files
 *.dat
 *.txt
@@ -31,3 +34,4 @@
 *.exe
 *.out
 *.app
+codice # not elegant, but I don't want to give an extension to the executable
