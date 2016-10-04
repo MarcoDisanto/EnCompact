@@ -1,5 +1,10 @@
-# Temp files
-temp
+# Ignore all
+*
+
+# Unignore all files with extension
+!*.*
+
+### Above combination will ignore all files without extension ###
 
 # Text files
 *.dat
@@ -34,4 +39,3 @@ temp
 *.exe
 *.out
 *.app
-codice # not elegant, but I don't want to give an extension to the executable
