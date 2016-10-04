@@ -1,0 +1,40 @@
+# INPUT FILE
+# domain geometry
+# number of dimensions (1, 2, or 3)
+ndims   2
+# domain length along each dimension (ndims real numbers)
+L       31      3
+# periodicity along each dimension (ndims 0s or 1s)
+p       0       0
+
+# spatial discretization
+# number of cells per dimension (ndims integer numbers)
+N       10      10
+# spacings along each dimension (ndims integers)
+m       1       2
+# differential schemes
+# in the first direction
+# for interpolations (zero derivatives)
+scheme  dir1_der0_c2f   3 schemes:              4C_L    6C_C    4C_R
+scheme  dir1_der0_f2c   3 schemes:              5C_L    6C_C    5C_R
+# for first derivatives
+scheme  dir1_der1_c2f   5 schemes:      4C_LL   4C_L    6C_C    4C_R    4C_RR
+scheme  dir1_der1_f2c   3 schemes:              3E_L    6C_C    3E_R
+# for second derivatives
+scheme  dir1_der2_c2c   3 schemes:              5C_L    6C_C    5C_R
+scheme  dir1_der2_f2f   3 schemes:              5C_L    6C_C    5C_R
+# in the second direction
+# for interpolations (zero derivatives)
+scheme  dir2_der0_c2f   3 schemes:              4C_L    6C_C    4C_R
+scheme  dir2_der0_f2c   3 schemes:              5C_L    6C_C    5C_R
+# for first derivatives
+scheme  dir2_der1_c2f   5 schemes:      4C_LL   4C_L    6C_C    4C_R    4C_RR
+scheme  dir2_der1_f2c   3 schemes:              3E_L    6C_C    3E_R
+# for second derivatives
+scheme  dir2_der2_c2c   3 schemes:              5C_L    6C_C    5C_R
+scheme  dir2_der2_f2f   3 schemes:              5C_L    6C_C    5C_R
+
+# number of processes per direction (ndims integers; 0 to let MPI_DIMS_CREATE decide)
+np      0       0
+# reordering of processes (0 or 1)
+reorder 1
