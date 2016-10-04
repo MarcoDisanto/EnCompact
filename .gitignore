@@ -1,3 +1,7 @@
+# Text files
+*.dat
+*.txt
+
 # Compiled Object files
 *.slo
 *.lo
