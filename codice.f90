@@ -165,7 +165,23 @@ DO i = 0, nprocs-1
     CALL MPI_BARRIER(procs_grid, ierr)
 END DO
 
-if (myid == 2) then
+
+
+
+CALL SPIKE_exchange
+
+if (myid == 13) then
+    CALL printmatrix(uvwp(2)%values)
+    print *, 'cells = ', N
+    print *, 'b     = ', uvwp(2)%b(1,:),    uvwp(2)%b(2,:),    uvwp(2)%b(3,:)
+    print *, 'b_bc  = ', uvwp(2)%b_bc(1,:), uvwp(2)%b_bc(2,:), uvwp(2)%b_bc(3,:)
+    print *, 'b_ol  = ', uvwp(2)%b_ol(1,:), uvwp(2)%b_ol(2,:), uvwp(2)%b_ol(3,:)
+    print *, 'shape = ', SHAPE(uvwp(2)%values)
+endif
+
+CALL MPI_BARRIER(procs_grid, ierr)
+
+if (myid == 22) then
     CALL printmatrix(uvwp(2)%values)
     print *, 'cells = ', N
     print *, 'b     = ', uvwp(2)%b(1,:),    uvwp(2)%b(2,:),    uvwp(2)%b(3,:)
