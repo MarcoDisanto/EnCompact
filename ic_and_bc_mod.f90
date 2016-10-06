@@ -204,9 +204,9 @@ CONTAINS
         zero_ic: DO iv = 1, n_flow_variables-1
 
             uvwp(iv)%values = NaN
-            uvwp(iv)%values(uvwp(iv)%b_bc(1,1):uvwp(iv)%b_bc(1,2), &
-                          & uvwp(iv)%b_bc(2,1):uvwp(iv)%b_bc(2,2), &
-                          & uvwp(iv)%b_bc(3,1):uvwp(iv)%b_bc(3,2)) = myid
+            uvwp(iv)%values(uvwp(iv)%b(1,1):uvwp(iv)%b(1,2), &
+                          & uvwp(iv)%b(2,1):uvwp(iv)%b(2,2), &
+                          & uvwp(iv)%b(3,1):uvwp(iv)%b(3,2)) = myid
 
         END DO zero_ic
 
