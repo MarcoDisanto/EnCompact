@@ -1,8 +1,8 @@
 MODULE compact
 ! This module contains the following procedures
 !    SUBROUTINE set_compacts
-!    SUBROUTINE calc_compact_matrices(xL, xR, Adummy, Bdummy, schemes)
 !    SUBROUTINE compact_coeffs(LHS_s,RHS_s,LHS_o,RHS_o,c,coeffs)
+!    SUBROUTINE calc_compact_matrices(xL, xR, Adummy, Bdummy, schemes)
 ! where the first calls the second, and the second calls the third
 
     USE bandedmatrix, ONLY : CDS

@@ -25,15 +25,8 @@ MODULE MPI_module
     INTEGER, DIMENSION(:),     ALLOCATABLE :: N          ! number of cells to the current process along each dimension
     INTEGER, DIMENSION(:),     ALLOCATABLE :: rem        ! remainder of the division Ntot(i)/dims(i)
     INTEGER, DIMENSION(:,:,:), ALLOCATABLE :: Neq        ! number of equations to the current process along each dimension, for each order of derivation, and for each staggering
-    !INTEGER, DIMENSION(:),     ALLOCATABLE :: touchm, touchp, touch
 
-    INTEGER, DIMENSION(:), ALLOCATABLE :: pencil_comm!, pencil_group, world_ranks
-    ! TYPE pencil_int
-        ! INTEGER, DIMENSION(:), ALLOCATABLE :: values
-    ! END TYPE pencil_int
-    ! TYPE(pencil_int), DIMENSION(:), ALLOCATABLE :: pencil_rank
-    ! INTEGER :: world_group
-    ! INTEGER :: pippo
+    INTEGER, DIMENSION(:), ALLOCATABLE :: pencil_comm
 
 CONTAINS
 
@@ -118,36 +111,6 @@ CONTAINS
             STOP
 
         END SELECT create_ndims_pencil_communicators
-        
-        !ALLOCATE(pencil_rank(ndims),pencil_group(ndims),world_ranks(ndims))
-        !for_each_direction: DO id = 1, ndims
-
-        !    ALLOCATE(pencil_rank(id)%values(0:dims(id)-1))
-
-        !    scan_pencil_rank: DO ip = 0, dims(id)-1
-
-        !        select_dir: SELECT CASE (id)
-
-        !        CASE (1)
-        !            temp = [ip, mycoords(2), mycoords(3)]
-        !        CASE (2)
-        !            temp = [mycoords(1), ip, mycoords(3)]
-        !        CASE (3)
-        !            temp = [mycoords(1), mycoords(2), ip]
-
-        !        END SELECT select_dir
-
-        !        CALL MPI_CART_RANK(procs_grid, temp, pencil_rank(id)%values(ip), ierr)
-
-        !    END DO scan_pencil_rank
-
-        !END DO for_each_direction
-        ! call mpi_comm_group(pencil_comm(1),pencil_group(1),ierr)
-        ! call mpi_comm_group(MPI_COMM_WORLD,world_group,ierr)
-        ! call mpi_group_translate_ranks(pencil_group(1),3,[0,1,2],world_group,world_ranks,ierr)
-        ! call mpi_group_translate_ranks(pencil_comm(1), 1, jk)
-        ! call mpi_topo_test(pencil_comm(1), pippo, ierr)
-        ! print *, (pippo == MPI_undefined), (pippo == mpi_graph), (pippo == MPI_cart)
 
     END SUBROUTINE set_topology
 
