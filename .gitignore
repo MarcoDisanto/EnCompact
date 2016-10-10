@@ -4,7 +4,8 @@
 # Unignore all files with extension
 !*.*
 
-### Above combination will ignore all files without extension ###
+# Ignore dotfiles with .swp extension (vi/Vim swap files)
+.*.swp
 
 # Text files
 *.dat
