@@ -144,12 +144,18 @@ CONTAINS
                         ! into one 2D array so that the following DO would contain just one assignation
                         ! in another DO = 1,2
                         DO id2 = 1, ndims
-                            array_of_subsizes_m(id2) = KronDelta(id,id2)*(1 - uvwp(ic)%b_ol(id2,1)) + &
-                                                & (1 - KronDelta(id,id2))*(N(id2)*KronDelta(id,ic) + &
-                                                & (N(id2) - log2int(idm(ic) == MPI_PROC_NULL))*(1 - KronDelta(id,ic)))
-                            array_of_subsizes_p(id2) = KronDelta(id,id2)*(1 - uvwp(ic)%b_ol(id2,1)) + &
-                                                & (1 - KronDelta(id,id2))*(N(id2)*KronDelta(id,ic) + &
-                                                & (N(id2) - log2int(idp(ic) == MPI_PROC_NULL))*(1 - KronDelta(id,ic)))
+
+                            ! The size along the id2-th direction of the ndims-ranked subarray relative to the
+                            ! exchange of the ic-th component along the id-th direction is equal to the
+                            ! number of overlap layers if id2 == id, whereas, if id2 /= id, it is N(id2) diminished by 1
+                            ! if the the process touches the minus boundary along the ic-th direction.
+                            array_of_subsizes_m(id2) = KronDelta(id,id2)*(uvwp(ic)%b(id2,1) - uvwp(ic)%b_ol(id2,1)) + &
+                                                & (1 - KronDelta(id,id2))*(N(id2) - &
+                                                & log2int(idm(id2) == MPI_PROC_NULL)*KronDelta(id2,ic))
+
+                            array_of_subsizes_p(id2) = KronDelta(id,id2)*(uvwp(ic)%b_ol(id2,2) - uvwp(ic)%b(id2,2)) + &
+                                                & (1 - KronDelta(id,id2))*(N(id2) - &
+                                                & log2int(idm(id2) == MPI_PROC_NULL)*KronDelta(id2,ic))
                         END DO
 
                         array_of_starts = [0, 0, 0]
