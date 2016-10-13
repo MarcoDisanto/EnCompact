@@ -183,11 +183,157 @@ CONTAINS
 
     SUBROUTINE SPIKE_exchange
 
+        USE MPI,          ONLY : MPI_COMM_WORLD, MPI_STATUS_IGNORE, MPI_INTEGER, MPI_DOUBLE_PRECISION
         USE variables, ONLY : uvwp
+        USE MPI_module, ONLY : ndims, myid, procs_grid
+        USE variables, ONLY : MPI_flats_m, MPI_flats_p, rdispls_m, rdispls_p, sdispls_m, sdispls_p
 
         IMPLICIT NONE
 
-        ! <++>
+        INTEGER :: ierr, ii
+        INTEGER :: dpsize ! size in byte of the MPI_DOUBLE_PRECISION
+        !INTEGER, DIMENSION(2*ndims) :: rdispls, sdispls
+
+        !IF (myid == 13) THEN
+        !    CALL MPI_SEND(uvwp(2)%values(uvwp(2)%b(1,2)+uvwp(2)%b_ol(1,1),1,1),1,MPI_flats_m(2,1),22,777,MPI_COMM_WORLD,ierr)
+        !    CALL MPI_RECV(uvwp(2)%values(uvwp(2)%b(1,2)+1,1,1),1,MPI_flats_p(2,1),22,888,MPI_COMM_WORLD,MPI_STATUS_IGNORE,ierr)
+        !    CALL MPI_SEND(uvwp(2)%values(1,1,uvwp(2)%b(3,2)+uvwp(2)%b_ol(1,1)),1,MPI_flats_m(2,3),14,666,MPI_COMM_WORLD,ierr)
+        !    CALL MPI_RECV(uvwp(2)%values(1,1,uvwp(2)%b(3,2)+1),1,MPI_flats_p(2,3),14,555,MPI_COMM_WORLD,MPI_STATUS_IGNORE,ierr)
+
+        !ELSE IF (myid == 2) THEN
+        !    CALL MPI_RECV(uvwp(3)%values(1,uvwp(3)%b(2,2)+1,1),1,MPI_flats_p(3,2),5,111,MPI_COMM_WORLD,MPI_STATUS_IGNORE,ierr)
+        !    CALL MPI_SEND(uvwp(3)%values(1,uvwp(3)%b(2,2)+uvwp(3)%b_ol(2,1),1),1,MPI_flats_m(3,2),5,222,MPI_COMM_WORLD,ierr)
+
+        !ELSE IF (myid == 5) THEN
+        !    CALL MPI_SEND(uvwp(3)%values(1,uvwp(3)%b(2,1),1),1,MPI_flats_p(3,2),2,111,MPI_COMM_WORLD,ierr)
+        !    CALL MPI_RECV(uvwp(3)%values(1,uvwp(3)%b_ol(2,1),1),1,MPI_flats_m(3,2),2,222,MPI_COMM_WORLD,MPI_STATUS_IGNORE,ierr)
+
+        !ELSE IF (myid == 22) THEN
+        !    CALL MPI_RECV(uvwp(2)%values(uvwp(2)%b_ol(1,1),1,1),1,MPI_flats_m(2,1),13,777,MPI_COMM_WORLD,MPI_STATUS_IGNORE,ierr)
+        !    CALL MPI_SEND(uvwp(2)%values(uvwp(2)%b(1,1),1,1),1,MPI_flats_p(2,1),13,888,MPI_COMM_WORLD,ierr)
+
+        !ELSE IF (myid == 14) THEN
+        !    CALL MPI_RECV(uvwp(2)%values(1,1,uvwp(2)%b_ol(3,1)),1,MPI_flats_m(2,3),13,666,MPI_COMM_WORLD,MPI_STATUS_IGNORE,ierr)
+        !    CALL MPI_SEND(uvwp(2)%values(1,1,uvwp(2)%b(3,1)),1,MPI_flats_p(2,3),13,555,MPI_COMM_WORLD,ierr)
+        !END IF
+
+
+        CALL MPI_TYPE_SIZE(MPI_DOUBLE_PRECISION, dpsize, ierr)
+
+        !rdispls = [size(uvwp(2)%values,1)*size(uvwp(2)%values,2)*(uvwp(2)%b(3,1) - uvwp(2)%b_bo(3,1)) + &
+        !         & size(uvwp(2)%values,1)*(uvwp(2)%b(2,1) - uvwp(2)%b_bo(2,1)), &
+        !     
+        !         & size(uvwp(2)%values,1)*size(uvwp(2)%values,2)*(uvwp(2)%b(3,1) - uvwp(2)%b_bo(3,1)) + &
+        !         & size(uvwp(2)%values,1)*(uvwp(2)%b(2,1) - uvwp(2)%b_bo(2,1)) + &
+        !         & (uvwp(2)%b(1,2) - uvwp(2)%b_bo(1,1) + 1), &
+
+        !         & size(uvwp(2)%values,1)*size(uvwp(2)%values,2)*(uvwp(2)%b(3,1) - uvwp(2)%b_bo(3,1)) + &
+        !         & (uvwp(2)%b(1,1) - uvwp(2)%b_bo(1,1)), &
+
+        !         & size(uvwp(2)%values,1)*size(uvwp(2)%values,2)*(uvwp(2)%b(3,1) - uvwp(2)%b_bo(3,1)) + &
+        !         & size(uvwp(2)%values,1)*(uvwp(2)%b(2,2) - uvwp(2)%b_bo(2,1) + 1) + &
+        !         & (uvwp(2)%b(1,1) - uvwp(2)%b_bo(1,1)), &
+
+        !         & size(uvwp(2)%values,1)*(uvwp(2)%b(2,1) - uvwp(2)%b_bo(2,1)) + &
+        !         & (uvwp(2)%b(1,1) - uvwp(2)%b_bo(1,1)), &
+
+        !         & size(uvwp(2)%values,1)*size(uvwp(2)%values,2)*(uvwp(2)%b(3,2) - uvwp(2)%b_bo(3,1) + 1) + &
+        !         & size(uvwp(2)%values,1)*(uvwp(2)%b(2,1) - uvwp(2)%b_bo(2,1)) + &
+        !         & (uvwp(2)%b(1,1) - uvwp(2)%b_bo(1,1))]*dpsize
+
+        !CALL MPI_BARRIER(MPI_COMM_WORLD, ierr)
+        !IF (myid == 5) THEN
+        !    print *, "uvwp(2)%values' shape", shape(uvwp(2)%values)
+        !    print *, "uvwp(2)%values' b    ", uvwp(2)%b
+        !    print *, "uvwp(2)%values' b_ol ", uvwp(2)%b_ol
+        !    print *, "uvwp(2)%values' b_bc ", uvwp(2)%b_bc
+        !    print *, "uvwp(2)%values' b_bo ", uvwp(2)%b_bo
+        !    print *, rdispls/dpsize
+        !END IF
+        !CALL MPI_BARRIER(MPI_COMM_WORLD, ierr)
+
+        !sdispls = [size(uvwp(2)%values,1)*size(uvwp(2)%values,2)*(uvwp(2)%b(3,1) - uvwp(2)%b_bo(3,1)) + &
+        !         & size(uvwp(2)%values,1)*(uvwp(2)%b(2,1) - uvwp(2)%b_bo(2,1)) + &
+        !         & (uvwp(2)%b(1,1) - uvwp(2)%b_bo(1,1)), &
+        !     
+        !         & size(uvwp(2)%values,1)*size(uvwp(2)%values,2)*(uvwp(2)%b(3,1) - uvwp(2)%b_bo(3,1)) + &
+        !         & size(uvwp(2)%values,1)*(uvwp(2)%b(2,1) - uvwp(2)%b_bo(2,1)) + &
+        !         & - (uvwp(2)%b(1,1) - uvwp(2)%b_bo(1,1)), &
+
+        !         & size(uvwp(2)%values,1)*size(uvwp(2)%values,2)*(uvwp(2)%b(3,1) - uvwp(2)%b_bo(3,1)) + &
+        !         & size(uvwp(2)%values,1)*(uvwp(2)%b(2,1) - uvwp(2)%b_bo(2,1)) + &
+        !         & (uvwp(2)%b(1,1) - uvwp(2)%b_bo(1,1)), &
+
+        !         & size(uvwp(2)%values,1)*size(uvwp(2)%values,2)*(uvwp(2)%b(3,1) - uvwp(2)%b_bo(3,1)) + &
+        !         & size(uvwp(2)%values,1)*(uvwp(2)%b(2,2) - uvwp(2)%b_bo(2,1) + 1) + &
+        !         & (uvwp(2)%b(1,1) - uvwp(2)%b_bo(1,1)), &
+
+        !         & size(uvwp(2)%values,1)*size(uvwp(2)%values,2)*(uvwp(2)%b(3,1) - uvwp(2)%b_bo(3,1)) + &
+        !         & size(uvwp(2)%values,1)*(uvwp(2)%b(2,1) - uvwp(2)%b_bo(2,1)) + &
+        !         & (uvwp(2)%b(1,1) - uvwp(2)%b_bo(1,1)), &
+
+        !         & size(uvwp(2)%values,1)*size(uvwp(2)%values,2)*(uvwp(2)%b(3,2) - uvwp(2)%b_bo(3,1) + 1) + &
+        !         & size(uvwp(2)%values,1)*(uvwp(2)%b(2,1) - uvwp(2)%b_bo(2,1)) + &
+        !         & (uvwp(2)%b(1,1) - uvwp(2)%b_bo(1,1))]*dpsize
+
+        !CALL MPI_BARRIER(MPI_COMM_WORLD, ierr)
+        !IF (myid == 5) THEN
+        !    print *, "uvwp(2)%values' shape", shape(uvwp(2)%values)
+        !    print *, "uvwp(2)%values' b    ", uvwp(2)%b
+        !    print *, "uvwp(2)%values' b_ol ", uvwp(2)%b_ol
+        !    print *, "uvwp(2)%values' b_bc ", uvwp(2)%b_bc
+        !    print *, "uvwp(2)%values' b_bo ", uvwp(2)%b_bo
+        !    print *, sdispls/dpsize
+        !END IF
+        !CALL MPI_BARRIER(MPI_COMM_WORLD, ierr)
+
+        CALL MPI_BARRIER(MPI_COMM_WORLD, ierr)
+        ! IF (myid == 6) THEN
+            ! print *, [sdispls_p(2,1), sdispls_m(2,1), sdispls_p(2,2), sdispls_m(2,2), sdispls_p(2,3), sdispls_m(2,3)]/dpsize
+            ! print *, [rdispls_m(2,1), rdispls_p(2,1), rdispls_m(2,2), rdispls_p(2,2), rdispls_m(2,3), rdispls_p(2,3)]/dpsize
+        ! END IF
+
+        DO ii = 0, 26
+            CALL MPI_BARRIER(MPI_COMM_WORLD, ierr)
+            IF (myid == ii) THEN
+                print *,myid,[sdispls_p(2,1), sdispls_m(2,1), sdispls_p(2,2), sdispls_m(2,2), sdispls_p(2,3), sdispls_m(2,3)]/dpsize
+                ! print *,myid,[rdispls_m(2,1), rdispls_p(2,1), rdispls_m(2,2), rdispls_p(2,2), rdispls_m(2,3), rdispls_p(2,3)]/dpsize
+                ! print *, 'prima', myid
+                ! CALL MPI_NEIGHBOR_ALLTOALLW(uvwp(2)%values(uvwp(2)%b_bo(1,1),uvwp(2)%b_bo(2,1),uvwp(2)%b_bo(3,1)), &
+                    ! & [1,1,1,1,1,1], &
+                    ! & [sdispls_p(2,1), sdispls_m(2,1), sdispls_p(2,2), sdispls_m(2,2), sdispls_p(2,3), sdispls_m(2,3)],&
+                    ! & [MPI_flats_p(2,1), MPI_flats_m(2,1), MPI_flats_p(2,2), MPI_flats_m(2,2), MPI_flats_p(2,3), MPI_flats_m(2,3)],&
+                                          ! & uvwp(2)%values(uvwp(2)%b_bo(1,1),uvwp(2)%b_bo(2,1),uvwp(2)%b_bo(3,1)), &
+                    ! & [1,1,1,1,1,1], &
+                    ! & [rdispls_m(2,1), rdispls_p(2,1), rdispls_m(2,2), rdispls_p(2,2), rdispls_m(2,3), rdispls_p(2,3)],&
+                    ! & [MPI_flats_m(2,1), MPI_flats_p(2,1), MPI_flats_m(2,2), MPI_flats_p(2,2), MPI_flats_m(2,3), MPI_flats_p(2,3)],&
+                                           ! &procs_grid, ierr)                       
+                ! print *, 'dopo', myid
+            END IF
+        END DO
+                                                                            
+        ! MPI_NEIGHBOR_ALLTOALLW(SENDBUF, SENDCOUNTS, SDISPLS, SENDTYPES,
+        !                        RECVBUF, RECVCOUNTS, RDISPLS, RECVTYPES, COMM, IERROR)
+        !<type>    SENDBUF(*), RECVBUF(*)
+        !INTEGER    SENDCOUNTS(*), SDISPLS(*), SENDTYPES(*)
+        !INTEGER    RECVCOUNTS(*), RDISPLS(*), RECVTYPES(*)
+        !INTEGER    COMM, IERROR
+        !sendbuf
+        !       Starting address of send buffer.
+        !sendcounts
+        !       Integer array, where entry i specifies the number of elements to send to neighbor i.
+        !sdispls
+        !       Integer array, where entry i specifies the displacement (in bytes, offset from sendbuf) from which to send data to neighbor i.
+        !sendtypes
+        !       Datatype array, where entry i specifies the datatype to use when sending data to neighbor i.
+        !recvcounts
+        !       Integer array, where entry j specifies the number of elements to receive from neighbor j.
+        !rdispls
+        !       Integer array, where entry j specifies the displacement (in bytes, offset from recvbuf) to which data from neighbor j should be written.
+        !recvtypes
+        !       Datatype array, where entry j specifies the datatype to use when receiving data from neighbor j.
+        !comm
+        !       Communicator over which data is to be exchanged.
 
     END SUBROUTINE SPIKE_exchange
 
