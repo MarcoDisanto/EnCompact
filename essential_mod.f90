@@ -41,6 +41,8 @@ CONTAINS
     END FUNCTION KronDelta
 
 
+    ! FIXME: this function is maybe useless, since Fortran should already support vector-valued indices,
+    ! as it is said here -> http://www.moreisdifferent.com/2015/07/16/why-physicsts-still-use-fortran/
     FUNCTION extract_elements(array, indices) RESULT(extracted)
 
         IMPLICIT NONE

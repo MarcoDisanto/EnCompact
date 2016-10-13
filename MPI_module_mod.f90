@@ -26,7 +26,7 @@ MODULE MPI_module
     INTEGER, DIMENSION(:),     ALLOCATABLE :: rem        ! remainder of the division Ntot(i)/dims(i)
     INTEGER, DIMENSION(:,:,:), ALLOCATABLE :: Neq        ! number of equations to the current process along each dimension, for each order of derivation, and for each staggering
 
-    INTEGER, DIMENSION(:), ALLOCATABLE :: pencil_comm
+    INTEGER, DIMENSION(:), ALLOCATABLE :: pencil_comm ! pencil communicators
 
 CONTAINS
 
