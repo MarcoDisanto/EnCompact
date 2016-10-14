@@ -15,8 +15,8 @@ MODULE SPIKE
     TYPE(SPIKE_type), DIMENSION(:,:,:), ALLOCATABLE, TARGET :: SPK
 
     REAL, DIMENSION(:,:), ALLOCATABLE :: a1end         ! first and last columns of the inverse of A
-    REAL, DIMENSION(:),   ALLOCATABLE :: DphiC, Dphi0  ! coupling unknowns and knowns (master)
-    REAL, DIMENSION(2)                :: DphiCp        ! coupling unknowns of the current process
+    ! REAL, DIMENSION(:),   ALLOCATABLE :: DphiC, Dphi0  ! coupling unknowns and knowns (master)
+    ! REAL, DIMENSION(2)                :: DphiCp        ! coupling unknowns of the current process
 
 CONTAINS
 
@@ -181,16 +181,96 @@ CONTAINS
     END SUBROUTINE SPIKE_init
 
 
-    SUBROUTINE SPIKE_exchange
+    SUBROUTINE SPIKE_exchange_uvw
 
-        USE variables, ONLY : uvwp
+        USE MPI,        ONLY : MPI_COMM_WORLD, MPI_STATUS_IGNORE, MPI_INTEGER, MPI_DOUBLE_PRECISION, MPI_PROC_NULL
+        USE MPI_module, ONLY : ndims, myid, procs_grid, idm, idp
+        USE variables,  ONLY : uvwp, MPI_flats_m, MPI_flats_p
+        USE essentials, ONLY : log2int => logical2integer, KronDelta
 
         IMPLICIT NONE
 
-        ! <++>
+        INTEGER :: ierr, ii, ic, id
 
-    END SUBROUTINE SPIKE_exchange
+        ! boundary values of are exchanged between adjacent processes
 
+        for_each_component: DO ic = 1, ndims
+
+            id = 1
+            CALL MPI_SENDRECV(uvwp(ic)%values( &
+                            & uvwp(ic)%b(id,2) + uvwp(ic)%b_ol(id,1) - KronDelta(ic,id)*log2int(idm(id) == MPI_PROC_NULL), &
+                            & 1 + KronDelta(ic,2)*log2int(idm(2) == MPI_PROC_NULL), &
+                            & 1 + KronDelta(ic,3)*log2int(idm(3) == MPI_PROC_NULL)), &
+                            & 1, MPI_flats_m(ic,id), idp(id), 111, &
+                            & uvwp(ic)%values( &
+                            & uvwp(ic)%b_bo(id,1), &
+                            & 1 + KronDelta(ic,2)*log2int(idm(2) == MPI_PROC_NULL), &
+                            & 1 + KronDelta(ic,3)*log2int(idm(3) == MPI_PROC_NULL)), &
+                            & 1, MPI_flats_m(ic,id), idm(id), 111, &
+                            & procs_grid, MPI_STATUS_IGNORE, ierr)
+            CALL MPI_SENDRECV(uvwp(ic)%values( &
+                            & uvwp(ic)%b(id,1), &
+                            & 1 + KronDelta(ic,2)*log2int(idm(2) == MPI_PROC_NULL), &
+                            & 1 + KronDelta(ic,3)*log2int(idm(3) == MPI_PROC_NULL)), &
+                            & 1, MPI_flats_p(ic,id), idm(id), 1111, &
+                            & uvwp(ic)%values( &
+                            & uvwp(ic)%b(id,2) + 1, &
+                            & 1 + KronDelta(ic,2)*log2int(idm(2) == MPI_PROC_NULL), &
+                            & 1 + KronDelta(ic,3)*log2int(idm(3) == MPI_PROC_NULL)), &
+                            & 1, MPI_flats_p(ic,id), idp(id), 1111, &
+                            & procs_grid, MPI_STATUS_IGNORE, ierr)
+
+            id = 2
+            CALL MPI_SENDRECV(uvwp(ic)%values( &
+                            & 1 + KronDelta(ic,1)*log2int(idm(1) == MPI_PROC_NULL), &
+                            & uvwp(ic)%b(id,2) + uvwp(ic)%b_ol(id,1) - KronDelta(ic,id)*log2int(idm(id) == MPI_PROC_NULL), &
+                            & 1 + KronDelta(ic,3)*log2int(idm(3) == MPI_PROC_NULL)), &
+                            & 1, MPI_flats_m(ic,id), idp(id), 111, &
+                            & uvwp(ic)%values( &
+                            & 1 + KronDelta(ic,1)*log2int(idm(1) == MPI_PROC_NULL), &
+                            & uvwp(ic)%b_bo(id,1), &
+                            & 1 + KronDelta(ic,3)*log2int(idm(3) == MPI_PROC_NULL)), &
+                            & 1, MPI_flats_m(ic,id), idm(id), 111, &
+                            & procs_grid, MPI_STATUS_IGNORE, ierr)
+            CALL MPI_SENDRECV(uvwp(ic)%values( &
+                            & 1 + KronDelta(ic,1)*log2int(idm(1) == MPI_PROC_NULL), &
+                            & uvwp(ic)%b(id,1), &
+                            & 1 + KronDelta(ic,3)*log2int(idm(3) == MPI_PROC_NULL)), &
+                            & 1, MPI_flats_p(ic,id), idm(id), 1111, &
+                            & uvwp(ic)%values( &
+                            & 1 + KronDelta(ic,1)*log2int(idm(1) == MPI_PROC_NULL), &
+                            & uvwp(ic)%b(id,2) + 1, &
+                            & 1 + KronDelta(ic,3)*log2int(idm(3) == MPI_PROC_NULL)), &
+                            & 1, MPI_flats_p(ic,id), idp(id), 1111, &
+                            & procs_grid, MPI_STATUS_IGNORE, ierr)
+
+            id = 3
+            CALL MPI_SENDRECV(uvwp(ic)%values( &
+                            & 1 + KronDelta(ic,1)*log2int(idm(1) == MPI_PROC_NULL), &
+                            & 1 + KronDelta(ic,2)*log2int(idm(2) == MPI_PROC_NULL), &
+                            & uvwp(ic)%b(id,2) + uvwp(ic)%b_ol(id,1) - KronDelta(ic,id)*log2int(idm(id) == MPI_PROC_NULL)), &
+                            & 1, MPI_flats_m(ic,id), idp(id), 111, &
+                            & uvwp(ic)%values( &
+                            & 1 + KronDelta(ic,1)*log2int(idm(1) == MPI_PROC_NULL), &
+                            & 1 + KronDelta(ic,2)*log2int(idm(2) == MPI_PROC_NULL), &
+                            & uvwp(ic)%b_bo(id,1)), &
+                            & 1, MPI_flats_m(ic,id), idm(id), 111, &
+                            & procs_grid, MPI_STATUS_IGNORE, ierr)
+            CALL MPI_SENDRECV(uvwp(ic)%values( &
+                            & 1 + KronDelta(ic,1)*log2int(idm(1) == MPI_PROC_NULL), &
+                            & 1 + KronDelta(ic,2)*log2int(idm(2) == MPI_PROC_NULL), &
+                            & uvwp(ic)%b(id,1)), &
+                            & 1, MPI_flats_p(ic,id), idm(id), 1111, &
+                            & uvwp(ic)%values( &
+                            & 1 + KronDelta(ic,1)*log2int(idm(1) == MPI_PROC_NULL), &
+                            & 1 + KronDelta(ic,2)*log2int(idm(2) == MPI_PROC_NULL), &
+                            & uvwp(ic)%b(id,2) + 1), &
+                            & 1, MPI_flats_p(ic,id), idp(id), 1111, &
+                            & procs_grid, MPI_STATUS_IGNORE, ierr)
+
+            END DO for_each_component
+
+    END SUBROUTINE SPIKE_exchange_uvw
 
 !    SUBROUTINE SPIKE_step(Adummy,Bdummy,phidummy,Dphidummy)
 !
