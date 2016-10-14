@@ -14,7 +14,7 @@ USE SPIKE
 
 IMPLICIT NONE
 
-INTEGER :: ierr, i
+INTEGER :: ierr, i, ic
 INTEGER, PARAMETER :: out_unit = 1
 INTEGER :: MPI_v, MPI_sub_v, MPI_v_len
 CHARACTER(len=140) :: MPI_v_str
@@ -170,67 +170,22 @@ END DO
 
 
 
-CALL SPIKE_exchange
+CALL SPIKE_exchange_uvw
 
-!if (myid == 13) then
-!    CALL printmatrix(uvwp(2)%values)
-!    print *, 'cells = ', N
-!    print *, 'b     = ', uvwp(2)%b(1,:),    uvwp(2)%b(2,:),    uvwp(2)%b(3,:)
-!    print *, 'b_bc  = ', uvwp(2)%b_bc(1,:), uvwp(2)%b_bc(2,:), uvwp(2)%b_bc(3,:)
-!    print *, 'b_ol  = ', uvwp(2)%b_ol(1,:), uvwp(2)%b_ol(2,:), uvwp(2)%b_ol(3,:)
-!    print *, 'shape = ', SHAPE(uvwp(2)%values)
-!endif
-!
-!CALL MPI_BARRIER(procs_grid, ierr)
-!
-!if (myid == 14) then
-!    CALL printmatrix(uvwp(2)%values)
-!    print *, 'cells = ', N
-!    print *, 'b     = ', uvwp(2)%b(1,:),    uvwp(2)%b(2,:),    uvwp(2)%b(3,:)
-!    print *, 'b_bc  = ', uvwp(2)%b_bc(1,:), uvwp(2)%b_bc(2,:), uvwp(2)%b_bc(3,:)
-!    print *, 'b_ol  = ', uvwp(2)%b_ol(1,:), uvwp(2)%b_ol(2,:), uvwp(2)%b_ol(3,:)
-!    print *, 'shape = ', SHAPE(uvwp(2)%values)
-!endif
-!
-!CALL MPI_BARRIER(procs_grid, ierr)
-!
-!if (myid == 22) then
-!    CALL printmatrix(uvwp(2)%values)
-!    print *, 'cells = ', N
-!    print *, 'b     = ', uvwp(2)%b(1,:),    uvwp(2)%b(2,:),    uvwp(2)%b(3,:)
-!    print *, 'b_bc  = ', uvwp(2)%b_bc(1,:), uvwp(2)%b_bc(2,:), uvwp(2)%b_bc(3,:)
-!    print *, 'b_ol  = ', uvwp(2)%b_ol(1,:), uvwp(2)%b_ol(2,:), uvwp(2)%b_ol(3,:)
-!    print *, 'shape = ', SHAPE(uvwp(2)%values)
-!endif
-!CALL MPI_BARRIER(procs_grid, ierr)
-!
-!if (myid == 5) then
-!    CALL printmatrix(uvwp(3)%values)
-!    print *, 'cells = ', N
-!    print *, 'b     = ', uvwp(3)%b(1,:),    uvwp(3)%b(2,:),    uvwp(3)%b(3,:)
-!    print *, 'b_bc  = ', uvwp(3)%b_bc(1,:), uvwp(3)%b_bc(2,:), uvwp(3)%b_bc(3,:)
-!    print *, 'b_ol  = ', uvwp(3)%b_ol(1,:), uvwp(3)%b_ol(2,:), uvwp(3)%b_ol(3,:)
-!    print *, 'shape = ', SHAPE(uvwp(3)%values)
-!endif
-!CALL MPI_BARRIER(procs_grid, ierr)
-!
-!if (myid == 2) then
-!    CALL printmatrix(uvwp(3)%values)
-!    print *, 'cells = ', N
-!    print *, 'b     = ', uvwp(3)%b(1,:),    uvwp(3)%b(2,:),    uvwp(3)%b(3,:)
-!    print *, 'b_bc  = ', uvwp(3)%b_bc(1,:), uvwp(3)%b_bc(2,:), uvwp(3)%b_bc(3,:)
-!    print *, 'b_ol  = ', uvwp(3)%b_ol(1,:), uvwp(3)%b_ol(2,:), uvwp(3)%b_ol(3,:)
-!    print *, 'shape = ', SHAPE(uvwp(3)%values)
-!endif
-!
-if (myid == 10) then
-    ! CALL printmatrix(uvwp(3)%values)
-    print *, 'cells = ', N
-    print *, 'b     = ', uvwp(2)%b(1,:),    uvwp(2)%b(2,:),    uvwp(2)%b(3,:)
-    print *, 'b_bc  = ', uvwp(2)%b_bc(1,:), uvwp(2)%b_bc(2,:), uvwp(2)%b_bc(3,:)
-    print *, 'b_ol  = ', uvwp(2)%b_ol(1,:), uvwp(2)%b_ol(2,:), uvwp(2)%b_ol(3,:)
-    print *, 'shape = ', SHAPE(uvwp(2)%values)
-endif
+ic = 2
+DO i = 0,nprocs-1
+    CALL MPI_BARRIER(procs_grid, ierr)
+    if (myid == i) then
+        CALL printmatrix(uvwp(ic)%values)
+        print *, 'cells = ', N
+        print *, 'b     = ', uvwp(ic)%b(1,:),    uvwp(ic)%b(2,:),    uvwp(ic)%b(3,:)
+        print *, 'b_bc  = ', uvwp(ic)%b_bc(1,:), uvwp(ic)%b_bc(2,:), uvwp(ic)%b_bc(3,:)
+        print *, 'b_ol  = ', uvwp(ic)%b_ol(1,:), uvwp(ic)%b_ol(2,:), uvwp(ic)%b_ol(3,:)
+        print *, 'b_bo  = ', uvwp(ic)%b_bo(1,:), uvwp(ic)%b_bo(2,:), uvwp(ic)%b_bo(3,:)
+        print *, 'shape = ', SHAPE(uvwp(ic)%values)
+    endif
+END DO
+
 
 
 ! print MPI library version
