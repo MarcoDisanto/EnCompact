@@ -14,7 +14,7 @@ MODULE essentials
 
     INTERFACE printmatrix
         MODULE PROCEDURE print2DmatrixINT
-        !MODULE PROCEDURE print3DmatrixINT
+        MODULE PROCEDURE print3DmatrixINT
         MODULE PROCEDURE print1DmatrixREAL
         MODULE PROCEDURE print2DmatrixREAL
         MODULE PROCEDURE print3DmatrixREAL
@@ -200,6 +200,37 @@ CONTAINS
         END DO
 
     END SUBROUTINE print2DmatrixINT
+
+
+    SUBROUTINE print3DmatrixINT(A)
+
+        IMPLICIT NONE
+
+        INTEGER, DIMENSION(:,:,:), ALLOCATABLE :: A
+        INTEGER, DIMENSION(3) :: lb, ub
+        INTEGER :: ix, iz
+        CHARACTER(len=3), DIMENSION(0:4) :: ordinal
+
+        ordinal(0) = '-th'
+        ordinal(1) = '-st'
+        ordinal(2) = '-nd'
+        ordinal(3) = '-rd'
+        ordinal(4) = '-th'
+
+        lb = LBOUND(A)
+        ub = UBOUND(A)
+        DO iz = lb(3), ub(3)
+            WRITE(*,*) iz, ordinal(MIN(ABS(iz),4)), " Z slice (colums indexed from",lb(2),"to",ub(2),")"
+            DO ix = lb(1), ub(1)
+                IF (ix == 1) THEN
+                    WRITE(*,*) '#1 ->', A(ix,:,iz)
+                ELSE
+                    WRITE(*,*) '     ', A(ix,:,iz)
+                END IF
+            END DO
+        END DO
+
+    END SUBROUTINE print3DmatrixINT
 
 
     SUBROUTINE print1DmatrixREAL(v)
