@@ -172,78 +172,18 @@ END DO
 
 CALL SPIKE_exchange
 
-!if (myid == 13) then
-!    CALL printmatrix(uvwp(2)%values)
-!    print *, 'cells = ', N
-!    print *, 'b     = ', uvwp(2)%b(1,:),    uvwp(2)%b(2,:),    uvwp(2)%b(3,:)
-!    print *, 'b_bc  = ', uvwp(2)%b_bc(1,:), uvwp(2)%b_bc(2,:), uvwp(2)%b_bc(3,:)
-!    print *, 'b_ol  = ', uvwp(2)%b_ol(1,:), uvwp(2)%b_ol(2,:), uvwp(2)%b_ol(3,:)
-!    print *, 'shape = ', SHAPE(uvwp(2)%values)
-!endif
-!
-!CALL MPI_BARRIER(procs_grid, ierr)
-!
-!if (myid == 14) then
-!    CALL printmatrix(uvwp(2)%values)
-!    print *, 'cells = ', N
-!    print *, 'b     = ', uvwp(2)%b(1,:),    uvwp(2)%b(2,:),    uvwp(2)%b(3,:)
-!    print *, 'b_bc  = ', uvwp(2)%b_bc(1,:), uvwp(2)%b_bc(2,:), uvwp(2)%b_bc(3,:)
-!    print *, 'b_ol  = ', uvwp(2)%b_ol(1,:), uvwp(2)%b_ol(2,:), uvwp(2)%b_ol(3,:)
-!    print *, 'shape = ', SHAPE(uvwp(2)%values)
-!endif
-!
-!CALL MPI_BARRIER(procs_grid, ierr)
-!
-!if (myid == 22) then
-!    CALL printmatrix(uvwp(2)%values)
-!    print *, 'cells = ', N
-!    print *, 'b     = ', uvwp(2)%b(1,:),    uvwp(2)%b(2,:),    uvwp(2)%b(3,:)
-!    print *, 'b_bc  = ', uvwp(2)%b_bc(1,:), uvwp(2)%b_bc(2,:), uvwp(2)%b_bc(3,:)
-!    print *, 'b_ol  = ', uvwp(2)%b_ol(1,:), uvwp(2)%b_ol(2,:), uvwp(2)%b_ol(3,:)
-!    print *, 'shape = ', SHAPE(uvwp(2)%values)
-!endif
-!CALL MPI_BARRIER(procs_grid, ierr)
-!
-!if (myid == 5) then
-!    CALL printmatrix(uvwp(3)%values)
-!    print *, 'cells = ', N
-!    print *, 'b     = ', uvwp(3)%b(1,:),    uvwp(3)%b(2,:),    uvwp(3)%b(3,:)
-!    print *, 'b_bc  = ', uvwp(3)%b_bc(1,:), uvwp(3)%b_bc(2,:), uvwp(3)%b_bc(3,:)
-!    print *, 'b_ol  = ', uvwp(3)%b_ol(1,:), uvwp(3)%b_ol(2,:), uvwp(3)%b_ol(3,:)
-!    print *, 'shape = ', SHAPE(uvwp(3)%values)
-!endif
-!CALL MPI_BARRIER(procs_grid, ierr)
-!
-!if (myid == 2) then
-!    CALL printmatrix(uvwp(3)%values)
-!    print *, 'cells = ', N
-!    print *, 'b     = ', uvwp(3)%b(1,:),    uvwp(3)%b(2,:),    uvwp(3)%b(3,:)
-!    print *, 'b_bc  = ', uvwp(3)%b_bc(1,:), uvwp(3)%b_bc(2,:), uvwp(3)%b_bc(3,:)
-!    print *, 'b_ol  = ', uvwp(3)%b_ol(1,:), uvwp(3)%b_ol(2,:), uvwp(3)%b_ol(3,:)
-!    print *, 'shape = ', SHAPE(uvwp(3)%values)
-!endif
-!
-if (myid == 10) then
-    ! CALL printmatrix(uvwp(3)%values)
-    print *, 'cells = ', N
-    print *, 'b     = ', uvwp(2)%b(1,:),    uvwp(2)%b(2,:),    uvwp(2)%b(3,:)
-    print *, 'b_bc  = ', uvwp(2)%b_bc(1,:), uvwp(2)%b_bc(2,:), uvwp(2)%b_bc(3,:)
-    print *, 'b_ol  = ', uvwp(2)%b_ol(1,:), uvwp(2)%b_ol(2,:), uvwp(2)%b_ol(3,:)
-    print *, 'shape = ', SHAPE(uvwp(2)%values)
-endif
-
 
 ! print MPI library version
-CALL MPI_BARRIER(procs_grid, ierr)
-IF (myid == 0) THEN
-    PRINT *, ''
-    PRINT *, ''
-    PRINT *, ''
-    CALL MPI_GET_LIBRARY_VERSION(MPI_v_str, MPI_v_len, ierr)
-    PRINT *, 'MPI_GET_LIBRARY_VERSION: ', MPI_v_str
-    CALL MPI_GET_VERSION(MPI_v, MPI_sub_v, ierr)
-    PRINT *, 'MPI_GET_VERSION: ', MPI_v, '.',  MPI_sub_v
-END IF
+!CALL MPI_BARRIER(MPI_COMM_WORLD, ierr)
+!IF (myid == 0) THEN
+!    PRINT *, ''
+!    PRINT *, ''
+!    PRINT *, ''
+!    CALL MPI_GET_LIBRARY_VERSION(MPI_v_str, MPI_v_len, ierr)
+!    PRINT *, 'MPI_GET_LIBRARY_VERSION: ', MPI_v_str
+!    CALL MPI_GET_VERSION(MPI_v, MPI_sub_v, ierr)
+!    PRINT *, 'MPI_GET_VERSION: ', MPI_v, '.',  MPI_sub_v
+!END IF
 
 CALL MPI_FINALIZE(ierr)
 
