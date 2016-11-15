@@ -183,10 +183,10 @@ CONTAINS
 
     SUBROUTINE SPIKE_exchange
 
-        USE MPI,          ONLY : MPI_COMM_WORLD, MPI_STATUS_IGNORE, MPI_INTEGER, MPI_DOUBLE_PRECISION, MPI_ORDER_FORTRAN
-        USE variables, ONLY : uvwp
+        USE MPI,        ONLY : MPI_COMM_WORLD, MPI_STATUS_IGNORE, MPI_INTEGER, MPI_DOUBLE_PRECISION, MPI_ORDER_FORTRAN
+        USE variables,  ONLY : uvwp
         USE MPI_module, ONLY : ndims, myid, procs_grid
-        USE variables, ONLY : rdispls_m, rdispls_p, sdispls_m, sdispls_p
+        USE variables,  ONLY : rdispls_m, rdispls_p, sdispls_m, sdispls_p
         USE essentials
 
         IMPLICIT NONE
@@ -200,33 +200,33 @@ CONTAINS
         CALL MPI_TYPE_SIZE(MPI_DOUBLE_PRECISION, dpsize, ierr)
 
         CALL MPI_TYPE_CREATE_SUBARRAY(3, &
-                                    & [7,7,7], [2,7,7], [0,0,0], &
+                                    & [7,7,7], [2,3,3], [0,0,0], &
                                     & MPI_ORDER_FORTRAN, &
                                     & MPI_INTEGER, MPI_flats_m(1,1), &
                                     & ierr)
         CALL MPI_TYPE_CREATE_SUBARRAY(3, &
-                                    & [7,7,7], [7,2,7], [0,0,0], &
+                                    & [7,7,7], [3,2,3], [0,0,0], &
                                     & MPI_ORDER_FORTRAN, &
                                     & MPI_INTEGER, MPI_flats_m(1,2), &
                                     & ierr)
         CALL MPI_TYPE_CREATE_SUBARRAY(3, &
-                                    & [7,7,7], [7,7,2], [0,0,0], &
+                                    & [7,7,7], [3,3,2], [0,0,0], &
                                     & MPI_ORDER_FORTRAN, &
                                     & MPI_INTEGER, MPI_flats_m(1,3), &
                                     & ierr)
 
         CALL MPI_TYPE_CREATE_SUBARRAY(3, &
-                                    & [7,7,7], [2,7,7], [0,0,0], &
+                                    & [7,7,7], [2,3,3], [0,0,0], &
                                     & MPI_ORDER_FORTRAN, &
                                     & MPI_INTEGER, MPI_flats_p(1,1), &
                                     & ierr)
         CALL MPI_TYPE_CREATE_SUBARRAY(3, &
-                                    & [7,7,7], [7,2,7], [0,0,0], &
+                                    & [7,7,7], [3,2,3], [0,0,0], &
                                     & MPI_ORDER_FORTRAN, &
                                     & MPI_INTEGER, MPI_flats_p(1,2), &
                                     & ierr)
         CALL MPI_TYPE_CREATE_SUBARRAY(3, &
-                                    & [7,7,7], [7,7,2], [0,0,0], &
+                                    & [7,7,7], [3,3,2], [0,0,0], &
                                     & MPI_ORDER_FORTRAN, &
                                     & MPI_INTEGER, MPI_flats_p(1,3), &
                                     & ierr)
@@ -242,16 +242,21 @@ CONTAINS
         ! address in memory of the reference point (smallest coordinates along the 3 dimensions, uvwp(.)%b_bo(.,1))
         CALL MPI_ADDRESS(mat(-1,-1,-1), address000,ierr)
         ! address in memory of of starting points of the two receiving and two sending flats
-        DO id = 1,3
-            CALL MPI_ADDRESS(mat(-1,-1,-1), rdispls_m(1,id), ierr)
-            CALL MPI_ADDRESS(mat(1,1,1), sdispls_p(1,id), ierr)
-        END DO
-        CALL MPI_ADDRESS(mat(4,-1,-1), rdispls_p(1,1), ierr)
-        CALL MPI_ADDRESS(mat(-1,4,-1), rdispls_p(1,2), ierr)
-        CALL MPI_ADDRESS(mat(-1,-1,4), rdispls_p(1,3), ierr)
-        CALL MPI_ADDRESS(mat(2,-1,-1), sdispls_m(1,1), ierr)
-        CALL MPI_ADDRESS(mat(-1,2,-1), sdispls_m(1,2), ierr)
-        CALL MPI_ADDRESS(mat(-1,-1,2), sdispls_m(1,3), ierr)
+        CALL MPI_ADDRESS(mat(-1,1,1), rdispls_m(1,1), ierr)
+        CALL MPI_ADDRESS(mat(1,-1,1), rdispls_m(1,2), ierr)
+        CALL MPI_ADDRESS(mat(1,1,-1), rdispls_m(1,3), ierr)
+
+        CALL MPI_ADDRESS(mat(1,1,1), sdispls_p(1,1), ierr)
+        CALL MPI_ADDRESS(mat(1,1,1), sdispls_p(1,2), ierr)
+        CALL MPI_ADDRESS(mat(1,1,1), sdispls_p(1,3), ierr)
+
+        CALL MPI_ADDRESS(mat(4,1,1), rdispls_p(1,1), ierr)
+        CALL MPI_ADDRESS(mat(1,4,1), rdispls_p(1,2), ierr)
+        CALL MPI_ADDRESS(mat(1,1,4), rdispls_p(1,3), ierr)
+
+        CALL MPI_ADDRESS(mat(2,1,1), sdispls_m(1,1), ierr)
+        CALL MPI_ADDRESS(mat(1,2,1), sdispls_m(1,2), ierr)
+        CALL MPI_ADDRESS(mat(1,1,2), sdispls_m(1,3), ierr)
         ! displacements with respect to the reference address000
         DO id = 1,3
             rdispls_m(1,id) = rdispls_m(1,id) - address000
@@ -260,6 +265,7 @@ CONTAINS
             sdispls_p(1,id) = sdispls_p(1,id) - address000
         END DO
         CALL MPI_TYPE_SIZE(MPI_INTEGER, intsize, ierr)
+        CALL MPI_TYPE_SIZE(MPI_DOUBLE_PRECISION, dpsize, ierr)
    print *,myid,'send',[sdispls_p(1,1), sdispls_m(1,1), sdispls_p(1,2), sdispls_m(1,2), sdispls_p(1,3), sdispls_m(1,3)]/intsize
    print *,myid,'recv',[rdispls_m(1,1), rdispls_p(1,1), rdispls_m(1,2), rdispls_p(1,2), rdispls_m(1,3), rdispls_p(1,3)]/intsize
         ! print *, 'prima', myid
