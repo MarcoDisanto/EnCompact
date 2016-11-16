@@ -32,7 +32,7 @@ CONTAINS
         USE essentials, ONLY : log2int => logical2integer, printmatrix
         USE compact,    ONLY : cmp
         USE, INTRINSIC :: IEEE_ARITHMETIC
-    
+
         IMPLICIT NONE
 
         !internal variables
@@ -62,13 +62,13 @@ CONTAINS
                     ! Set the pointers of already allocated variables
                     A => cmp(i,j,k)%A
                     N => cmp(i,j,k)%N
-                    
+
                     ! Calculate the spikes (i.e. first and last column of the inverse of A)
                     ALLOCATE(SPK(i,j,k)%a1end(N, 2))! Allocate spikes
                     a1end => SPK(i,j,k)%a1end   ! pointer to the spikes
                     ALLOCATE(delta(N, 2))       ! first and last column of the identity matrix
                     delta = 0                   ! ... already multiplied...
-                    delta(1,1) = A%matrix(1,-1) ! ... by alpha...
+                    delta(1,1) = A%matrix(1,-1) ! ... by alpha...FIXME
                     delta(N,2) = A%matrix(N,+1) ! ... and beta
                     CALL Thomas(A%matrix, delta(:,1), a1end(:,1)) ! solution for left  spike
                     CALL Thomas(A%matrix, delta(:,2), a1end(:,2)) ! solution for right spike
@@ -80,7 +80,7 @@ CONTAINS
                         ! ALLOCATE(SPK(i,j,k)%C%matrix(2*(dims(i) - log2int(.NOT.periodic(i))),-2:+2))
                         ALLOCATE(SPK(i,j,k)%C%matrix(2*dims(i),-2:+2))
 
-                    ELSE 
+                    ELSE
                         ! Puppet allocation for non-master.
                         ! Note that even if this array is never used
                         ! by non-master processes, it has to make sense
@@ -126,7 +126,7 @@ CONTAINS
                     !
                     !                                 x  x
                     !                                x  x
-                    !                                 
+                    !
                     !                                i
                     !
                     CALL MPI_TYPE_SIZE(MPI_DOUBLE_PRECISION, dpsize, ierr)
@@ -135,9 +135,9 @@ CONTAINS
                     ! Only the third type is committed
                     CALL MPI_TYPE_COMMIT(MPI_zigzag_res, ierr)
 
-                    ! The coupling matrix Cdummy is built 
+                    ! The coupling matrix Cdummy is built
                     pencil_master_build_C_matrix: IF (mycoords(i) == 0) THEN
-                    
+
                         ! initialization of the coupling matrix
                         C%matrix      = 0.0
                         C%matrix(:,0) = 1.0
@@ -272,6 +272,116 @@ CONTAINS
 
     END SUBROUTINE SPIKE_exchange_uvw
 
+
+
+
+
+
+SUBROUTINE SPIKE_solve(id, ider, istag, psi, q)
+! This subroutine solves the tridiagonal system necessary to retrieve the derivatives
+! It finds the necessary matrices by itself, accessing compact_mod by means of id, ider
+! and istag.
+
+USE compact, ONLY: compact_type, cmp
+USE essentials ! dopo cancella
+USE bandedmatrix
+USE MPI_module
+USE Thomas_suite
+USE, INTRINSIC :: IEEE_ARITHMETIC
+
+IMPLICIT NONE
+
+INTEGER, INTENT(IN)                           :: id, ider, istag    ! indices for direction, order of derivative and staggering (see compact_mod)
+REAL, DIMENSION(:), ALLOCATABLE, INTENT(IN)   :: q                  ! velocity vector in input
+REAL, DIMENSION(:), INTENT(OUT)               :: psi                ! derivative, solution of the system in output
+TYPE(CDS), POINTER                            :: Ap, Bp             ! just to simplify notations
+REAL, DIMENSION(SIZE(psi))                    :: bq                 ! RHS vector (B*q), same size as psi
+REAL, DIMENSION(:), ALLOCATABLE               :: psiC               ! vectors of coupled unknowns (only master process has to allocate it)
+REAL, DIMENSION(:), ALLOCATABLE               :: psi0C              ! RHS of reduced system (only master process has to allocate it)
+INTEGER                                       :: FirstLast_type     ! MPI type that contains first and last elements of a vector, ONLY: dims, ierr, ONLY: dims, ierr
+REAL, DIMENSION(:, :), POINTER                :: Cp                 ! SPIKE matrix pointer (just to simplify notation)
+INTEGER                                       :: ierr
+REAL                                          :: dum                ! temporary storage used to support elements reordering
+INTEGER                                       :: i
+!TYPE(JDS)                                     :: Bjds
+
+! Define NaN
+REAL :: r = 0.0, NaN ! r is a dummy real used to define a NaN of type real
+NaN = IEEE_VALUE(r, IEEE_QUIET_NAN) ! NaN of the same type as r
+
+Ap => cmp(id, ider, istag)%A
+Bp => cmp(id, ider, istag)%B
+
+! Dimensions check
+IF      (Ap%ub(2)-Ap%lb(2)+1/=SIZE(psi)) THEN
+  PRINT *, 'ERROR in SPIKE_mod. Output vector dimensions not coherent'
+  STOP
+ELSE IF (Bp%ub(2)-Bp%lb(2)+1/=SIZE(q))   THEN
+  PRINT *, 'ERROR in SPIKE_mod. Input vector dimensions not coherent'
+  STOP
+END IF
+
+!!!!!!!!! Partial solution (often denoted as psi0) !!!!!!!!!!
+bq = Bp*q
+CALL Thomas(Ap%matrix, bq, psi)
+
+!IF (myid==0) PRINT *, q
+!IF (myid==0) PRINT *, ''
+!IF (myid==0) CALL printmatrix(Bp%matrix)
+!IF (myid==0) PRINT *, lbound(q,1), ubound(q,1)
+!IF (myid==0) PRINT *, ''
+!IF (myid==0) PRINT *, bq
+
+
+!!!!!!!!!! Master process gathers required data !!!!!!!!!!
+! Type creation
+CALL MPI_TYPE_VECTOR(2, 1, SIZE(psi)-1, MPI_DOUBLE_PRECISION, FirstLast_type, ierr)
+CALL MPI_TYPE_COMMIT(FirstLast_type, ierr)
+! Reduced system vectors allocation
+ALLOCATE(psiC(2*dims(id)))
+ALLOCATE(psi0C(2*dims(id)))
+! master gathers RHS terms consisting of first and last elements of partial solution vector
+CALL MPI_gather(psi, 1, FirstLast_type, psi0C, 2, MPI_DOUBLE_PRECISION, 0, pencil_comm(id), ierr)
+psiC = NaN ! debug-purpose allocation
+
+!!!!!!!!!! Master process solves the penta-diagonal system !!!!!!!!!!
+coupled_system: IF (mycoords(id)==0) THEN
+  Cp => SPK(id, ider, istag)%C%matrix(2:SIZE(SPK(id, ider, istag)%C%matrix, 1)-1, :)  ! NOTE : no need for NaN rows
+  CALL pentdag(Cp(:, 1), Cp(:, 2), Cp(:, 3), Cp(:, 4), Cp(:, 5), &
+               psi0C(2:SIZE(psi0C)-1), psiC(2:SIZE(psiC)-1), SIZE(psiC)-2) ! must exclude first and last equations and unknowns to avoid generating more NaNs
+END IF coupled_system
+
+!!!!!!!!!! Reordering the reduced system's solution vector !!!!!!!!!!
+! Simple swap algorithm
+DO i = 2, SIZE(psiC)-2, 2
+  dum = psiC(i)
+  psiC(i) = psiC(i+1)
+  psiC(i+1) = dum
+END DO
+
+!!!!!!!!!! Master process distributes required data !!!!!!!!!!
+CALL MPI_SCATTER(psiC, 2, MPI_DOUBLE_PRECISION, psiC, 2, MPI_DOUBLE_PRECISION, 0, pencil_comm(id), ierr)
+
+!!!!!!!!!! Update unknowns !!!!!!!!!!
+IF (mycoords(id)==0) THEN
+  ! add only right value
+  psi = psi - SPK(id, ider, istag)%a1end(:, 2)*psiC(2)
+ELSE IF (mycoords(id)==dims(id)-1) THEN
+  ! add only left value
+  psi = psi - SPK(id, ider, istag)%a1end(:, 1)*psiC(1)
+ELSE
+  ! add both left and right values
+  psi = psi - SPK(id, ider, istag)%a1end(:, 1)*psiC(1) &
+            - SPK(id, ider, istag)%a1end(:, 2)*psiC(2)
+END IF
+
+END SUBROUTINE SPIKE_solve
+
+
+
+
+
+
 !    SUBROUTINE SPIKE_step(Adummy,Bdummy,phidummy,Dphidummy)
 !
 !        USE MPI_module
@@ -290,7 +400,7 @@ CONTAINS
 !        INTEGER :: i
 !        REAL, DIMENSION(N) :: q
 !        REAL, DIMENSION(N) :: Dphi0
-!        
+!
 !        ! boundary values of phi are exchanged between adjacent processes in
 !        ! order to compute q
 !        CALL MPI_SENDRECV(phidummy(N-Bdummy%lb+1:N),  Bdummy%lb,MPI_DOUBLE_PRECISION,idR,123,&
@@ -333,7 +443,7 @@ CONTAINS
 !                ! into continuous segments (of size 2) and sends them in rank order.
 !                ! So it's necessary to edit the vector DphiC such that each couple of
 !                ! odd-(odd+1) elments is substituted by the preceding and following
-!                ! elements.   
+!                ! elements.
 !                !
 !                ! odd-index values are stored in the temporary array
 !                temp1D = DphiC(1:2*dims(i)-1:2)
@@ -341,17 +451,17 @@ CONTAINS
 !                ! (cyclically)
 !                DphiC(1:2*dims(i)-1:2) = DphiC([2*dims(i),(i, i = 2,2*dims(i)-2,2)])
 !                ! the even-index values are substituted with the (even+1)-index values
-!                ! that were stored in the temporary array 
+!                ! that were stored in the temporary array
 !                DphiC(2:2*dims(i):2)   = temp1D([(i, i = 2,dims(i)),1])
 !         END IF
-!        
+!
 !        ! master process 'scatters' the array DphiC across the processes
 !        CALL MPI_SCATTER(DphiC, 2, MPI_DOUBLE_PRECISION, DphiCp, 2, &
 !                       & MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, ierr)
-!        
-!        ! provisional values of Dphi are corrected adding the SPIKES 
+!
+!        ! provisional values of Dphi are corrected adding the SPIKES
 !        Dphidummy   = Dphidummy - a1end(:,1)*DphiCp(1) - a1end(:,2)*DphiCp(2)
-! 
+!
 !    END SUBROUTINE SPIKE_step
 
 

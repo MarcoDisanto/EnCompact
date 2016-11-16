@@ -253,15 +253,35 @@ CONTAINS
                     ENDIF master_proc_scatters_compacts
 
                     ! each process allocates A and receives the proper chunk of it
-                    cmp(i,j,k)%A%lb  = [1, 1]
-                    cmp(i,j,k)%A%ub  = [Neq(i,j,k), Neq(i,j,k)]
-                    cmp(i,j,k)%A%ld  = 1
-                    cmp(i,j,k)%A%ud  = 1
-                    cmp(i,j,k)%A%lid = 1
-                    cmp(i,j,k)%A%uid = 1
-                    ALLOCATE(cmp(i,j,k)%A%matrix(cmp(i,j,k)%A%lb(1):cmp(i,j,k)%A%ub(1), -cmp(i,j,k)%A%ld:+cmp(i,j,k)%A%ud))
-                    CALL MPI_RECV(cmp(i,j,k)%A%matrix, &
-                                    & 3*Neq(i,j,k),MPI_DOUBLE_PRECISION,0,123,MPI_COMM_WORLD,MPI_STATUS_IGNORE,ierr)
+                    IF (mycoords(i) == 0) THEN
+
+                      cmp(i,j,k)%A%lb  = [1, (2-j)/2*(3-k) + &
+                                             (j/2)*k       + &
+                                             (2-j)*j]                ! not intuitive, it exploits the limitations on integer division
+                      cmp(i,j,k)%A%lb(1) = cmp(i,j,k)%A%lb(2)        ! this corrects column indices
+                      cmp(i,j,k)%A%ub  = [Neq(i,j,k), cmp(i,j,k)%A%lb(2) + Neq(i,j,k) - 1]
+                      cmp(i,j,k)%A%ub(1) = cmp(i,j,k)%A%ub(2)        ! this corrects column indices
+                      cmp(i,j,k)%A%ld  = 1
+                      cmp(i,j,k)%A%ud  = 1
+                      cmp(i,j,k)%A%lid = 1
+                      cmp(i,j,k)%A%uid = 1
+                      ALLOCATE(cmp(i,j,k)%A%matrix(cmp(i,j,k)%A%lb(1):cmp(i,j,k)%A%ub(1), -cmp(i,j,k)%A%ld:+cmp(i,j,k)%A%ud))
+                      CALL MPI_RECV(cmp(i,j,k)%A%matrix, &
+                                      & 3*Neq(i,j,k),MPI_DOUBLE_PRECISION,0,123,MPI_COMM_WORLD,MPI_STATUS_IGNORE,ierr)
+
+                    ELSE
+
+                      cmp(i,j,k)%A%lb  = [1, 1]
+                      cmp(i,j,k)%A%ub  = [Neq(i,j,k), Neq(i,j,k)]
+                      cmp(i,j,k)%A%ld  = 1
+                      cmp(i,j,k)%A%ud  = 1
+                      cmp(i,j,k)%A%lid = 1
+                      cmp(i,j,k)%A%uid = 1
+                      ALLOCATE(cmp(i,j,k)%A%matrix(cmp(i,j,k)%A%lb(1):cmp(i,j,k)%A%ub(1), -cmp(i,j,k)%A%ld:+cmp(i,j,k)%A%ud))
+                      CALL MPI_RECV(cmp(i,j,k)%A%matrix, &
+                                      & 3*Neq(i,j,k),MPI_DOUBLE_PRECISION,0,123,MPI_COMM_WORLD,MPI_STATUS_IGNORE,ierr)
+
+                    END IF
 
                     ! each process allocates B and receives the proper chunk of it
                     IF (mycoords(i) == 0) THEN ! process at the 'minus' border
@@ -270,8 +290,12 @@ CONTAINS
                         cmp(i,j,k)%B%ud  = +Bband_tot(2)
                         cmp(i,j,k)%B%lid = -Bband_int(1)
                         cmp(i,j,k)%B%uid = +Bband_int(2)
-                        cmp(i,j,k)%B%lb  = [1,                   1-cmp(i,j,k)%B%ld]
-                        cmp(i,j,k)%B%ub  = [Neq(i,j,k), Neq(i,j,k)+cmp(i,j,k)%B%ud]
+                        cmp(i,j,k)%B%lb  = [1, k-1]
+                        cmp(i,j,k)%B%ub  = [Neq(i,j,k), Neq(i,j,k) + cmp(i,j,k)%B%uid + cmp(i,j,k)%B%lid - 1 &
+                                                        - logical2integer(j==1)*logical2integer(k==1)        &
+                                                        - logical2integer(j==2)*logical2integer(k==1)] ! FIXME: una modifica è richiesta dalla derivata 2a per via del duplice significato
+                                                                                                       ! dell'indice di staggering 2 (f2f e f2c); l'altra, invece, è dovuta all'inclusione
+                                                                                                       ! dei valori di bordo tra le incognite della derivazione prima (ANOMALO).
                         ALLOCATE(cmp(i,j,k)%B%matrix(cmp(i,j,k)%B%lb(1):cmp(i,j,k)%B%ub(1), -cmp(i,j,k)%B%ld:+cmp(i,j,k)%B%ud))
                         CALL MPI_RECV(cmp(i,j,k)%B%matrix, (Bband_tot(2) - Bband_int(1) + 1)*Neq(i,j,k), &
                                         & MPI_DOUBLE_PRECISION, 0, 12, MPI_COMM_WORLD, MPI_STATUS_IGNORE, ierr)
@@ -282,8 +306,8 @@ CONTAINS
                         cmp(i,j,k)%B%ud  = +Bband_int(2)
                         cmp(i,j,k)%B%lid = -Bband_int(1)
                         cmp(i,j,k)%B%uid = +Bband_int(2)
-                        cmp(i,j,k)%B%lb  = [1,       1-cmp(i,j,k)%B%ld]
-                        cmp(i,j,k)%B%ub  = [Neq(i,j,k), Neq(i,j,k)+cmp(i,j,k)%B%ud]
+                        cmp(i,j,k)%B%lb  = [1,       1-cmp(i,j,k)%B%lid]
+                        cmp(i,j,k)%B%ub  = [Neq(i,j,k), Neq(i,j,k)+1-logical2integer(j==1)*logical2integer(k==1)]
                         ALLOCATE(cmp(i,j,k)%B%matrix(cmp(i,j,k)%B%lb(1):cmp(i,j,k)%B%ub(1), -cmp(i,j,k)%B%ld:+cmp(i,j,k)%B%ud))
                         CALL MPI_RECV(cmp(i,j,k)%B%matrix, (Bband_int(2) - Bband_tot(1) + 1)*Neq(i,j,k), &
                                         & MPI_DOUBLE_PRECISION, 0, 22, MPI_COMM_WORLD, MPI_STATUS_IGNORE, ierr)
@@ -688,7 +712,7 @@ CONTAINS
                     Adummy(i,0)     = 1
                     Bdummy(i,-2:+1) = coeffs
                     DEALLOCATE(coeffs)
-    
+
                 CASE ('D1_f2c_3E_L')
                     ! 3-th order explicit first derivative scheme from faces to centers
                     !   o       o       o       o
@@ -715,8 +739,8 @@ CONTAINS
                     Adummy(i,0)    = 1
                     Bdummy(i,0:+4) = coeffs
                     DEALLOCATE(coeffs)
-               
-               
+
+
                 CASE ('D1_f2c_5E_L')
                     ! 5-th order explicit first derivative scheme from faces to centers
                     !      o       o       o       o       o       o
@@ -729,8 +753,8 @@ CONTAINS
                     Adummy(i,0)     = 1
                     Bdummy(i,-1:+4) = coeffs
                     DEALLOCATE(coeffs)
-               
-               
+
+
                 CASE ('D1_f2c_5E_LL')
                     ! 5-th order explicit first derivative scheme from faces to centers
                     !      o       o       o       o       o       o
@@ -743,8 +767,8 @@ CONTAINS
                     Adummy(i,0)    = 1
                     Bdummy(i,0:+5) = coeffs
                     DEALLOCATE(coeffs)
-               
-               
+
+
                 CASE ('D1_f2c_6E_L')
                     ! 6-th order explicit first derivative scheme from faces to centers
                     !      o       o       o       o       o       o       o
@@ -771,8 +795,8 @@ CONTAINS
                     Adummy(i,0)   = 1
                     Bdummy(i,0:6) = coeffs
                     DEALLOCATE(coeffs)
-                
-                
+
+
                 CASE ('D1_c2f_1E_L')
                     ! 1-th order explicit first derivative scheme from faces to centers
                     !           o       o
@@ -785,8 +809,8 @@ CONTAINS
                     Adummy(i,0)    = 1
                     Bdummy(i,0:+1) = coeffs
                     DEALLOCATE(coeffs)
-                
-                
+
+
                 CASE ('D1_c2f_2E_L')
                     ! 2-th order explicit first derivative scheme from faces to centers
                     !           o       o       o
@@ -800,7 +824,7 @@ CONTAINS
                     Bdummy(i,0:+2) = coeffs
                     DEALLOCATE(coeffs)
 
-                
+
                 CASE ('D1_c2f_3E_L')
                     ! 3-th order explicit first derivative scheme from faces to centers
                     !   o       o       o       o
@@ -827,8 +851,8 @@ CONTAINS
                     Adummy(i,0)     = 1
                     Bdummy(i, 0:+3) = coeffs
                     DEALLOCATE(coeffs)
-               
-               
+
+
                 CASE ('D1_c2f_4E_L')
                     ! 4-th order explicit first derivative scheme from centers to faces
                     !           o       o       o       o       o
@@ -841,8 +865,8 @@ CONTAINS
                     Adummy(i,0)     = 1
                     Bdummy(i,-1:+3) = coeffs
                     DEALLOCATE(coeffs)
-               
-               
+
+
                 CASE ('D1_c2f_4E_LL')
                     ! 4-th order explicit first derivative scheme from centers to faces
                     !           o       o       o       o       o
@@ -855,8 +879,8 @@ CONTAINS
                     Adummy(i,0)     = 1
                     Bdummy(i, 0:+4) = coeffs
                     DEALLOCATE(coeffs)
-               
-               
+
+
                 CASE ('D1_c2f_5E_L')
                     ! 5-th order explicit first derivative scheme from centers to faces
                     !           o       o       o       o       o       o
@@ -869,8 +893,8 @@ CONTAINS
                     Adummy(i,0)     = 1
                     Bdummy(i,-2:+3) = coeffs
                     DEALLOCATE(coeffs)
-               
-               
+
+
                 CASE ('D1_c2f_5E_LL')
                     ! 5-th order explicit first derivative scheme from centers to faces
                     !           o       o       o       o       o       o
@@ -883,8 +907,8 @@ CONTAINS
                     Adummy(i,0)     = 1
                     Bdummy(i,-1:+4) = coeffs
                     DEALLOCATE(coeffs)
-               
-               
+
+
                 CASE ('D1_c2f_5E_LLL')
                     ! 5-th order explicit first derivative scheme from centers to faces
                     !           o       o       o       o       o       o
@@ -911,7 +935,7 @@ CONTAINS
                     Adummy(i,0)     = 1
                     Bdummy(i,-2:+4) = coeffs
                     DEALLOCATE(coeffs)
-               
+
 
                 CASE ('D1_c2f_6E_LL')
                     ! 6-th order explicit first derivative scheme from centers to faces
@@ -930,7 +954,7 @@ CONTAINS
                 CASE ('D1_c2f_6E_LLL')
                     ! 6-th order explicit first derivative scheme from centers to faces
                     !      o       o       o       o       o       o       o
-                    !   ___|_______|_______|_______|_______|_______|_______|
+                    !   ___|_______|_______|__IF (mycoords(i) == 0) THEN_____|_______|_______|_______|
                     !  |
                     !  \
                     ALLOCATE(coeffs(7))
@@ -1089,8 +1113,8 @@ CONTAINS
                     Adummy(i,0)     = 1
                     Bdummy(i,-3:+1) = coeffs
                     DEALLOCATE(coeffs)
-                
-                
+
+
                 CASE ('D1_f2c_5E_R')
                     ! 5-th order explicit first derivative scheme from faces to centers
                     !      o       o       o       o       o       o
@@ -1103,9 +1127,9 @@ CONTAINS
                     Adummy(i,0)     = 1
                     Bdummy(i,-3:+2) = coeffs
                     DEALLOCATE(coeffs)
-                
-                
-                
+
+
+
                 CASE ('D1_f2c_5E_RR')
                     ! 5-th order explicit first derivative scheme from faces to centers
                     !      o       o       o       o       o       o
@@ -1118,8 +1142,8 @@ CONTAINS
                     Adummy(i,0)     = 1
                     Bdummy(i,-4:+1) = coeffs
                     DEALLOCATE(coeffs)
-                
-                
+
+
                 CASE ('D1_f2c_6E_R')
                     ! 6-th order explicit first derivative scheme from faces to centers
                     !      o       o       o       o       o       o       o
@@ -1147,7 +1171,7 @@ CONTAINS
                     Bdummy(i,-5:1) = coeffs
                     DEALLOCATE(coeffs)
 
-                
+
                 CASE ('D1_c2f_1E_R')
                     ! 1-th order explicit first derivative scheme from faces to centers
                     !                   o       o
@@ -1161,7 +1185,7 @@ CONTAINS
                     Bdummy(i,-2:-1) = coeffs
                     DEALLOCATE(coeffs)
 
-                
+
                 CASE ('D1_c2f_2E_R')
                     ! 2-th order explicit first derivative scheme from faces to centers
                     !           o       o       o
@@ -1175,7 +1199,7 @@ CONTAINS
                     Bdummy(i,-3:-1) = coeffs
                     DEALLOCATE(coeffs)
 
-                
+
                 CASE ('D1_c2f_3E_R')
                     ! 3-th order explicit first derivative scheme from faces to centers
                     !                   o       o       o       o
@@ -1202,8 +1226,8 @@ CONTAINS
                     Adummy(i,0)     = 1
                     Bdummy(i,-4:-1) = coeffs
                     DEALLOCATE(coeffs)
-               
-               
+
+
                 CASE ('D1_c2f_4E_R')
                     ! 4-th order explicit first derivative scheme from centers to faces
                     !           o       o       o       o       o
@@ -1216,8 +1240,8 @@ CONTAINS
                     Adummy(i,0)     = 1
                     Bdummy(i,-4: 0) = coeffs
                     DEALLOCATE(coeffs)
-               
-               
+
+
                 CASE ('D1_c2f_4E_RR')
                     ! 4-th order explicit first derivative scheme from centers to faces
                     !           o       o       o       o       o
@@ -1230,8 +1254,8 @@ CONTAINS
                     Adummy(i,0)     = 1
                     Bdummy(i,-5:-1) = coeffs
                     DEALLOCATE(coeffs)
-               
-               
+
+
                 CASE ('D1_c2f_5E_R')
                     ! 5-th order explicit first derivative scheme from centers to faces
                     !           o       o       o       o       o       o
@@ -1244,8 +1268,8 @@ CONTAINS
                     Adummy(i,0)     = 1
                     Bdummy(i,-4:+1) = coeffs
                     DEALLOCATE(coeffs)
-               
-               
+
+
                 CASE ('D1_c2f_5E_RR')
                     ! 5-th order explicit first derivative scheme from centers to faces
                     !           o       o       o       o       o       o
@@ -1258,8 +1282,8 @@ CONTAINS
                     Adummy(i,0)     = 1
                     Bdummy(i,-5: 0) = coeffs
                     DEALLOCATE(coeffs)
-               
-               
+
+
                 CASE ('D1_c2f_5E_RRR')
                     ! 5-th order explicit first derivative scheme from centers to faces
                     !           o       o       o       o       o       o
@@ -1272,7 +1296,7 @@ CONTAINS
                     Adummy(i,0)     = 1
                     Bdummy(i,-6:-1) = coeffs
                     DEALLOCATE(coeffs)
-               
+
 
                 CASE ('D1_c2f_6E_R')
                     ! 6-th order explicit first derivative scheme from centers to faces
@@ -1402,5 +1426,6 @@ CONTAINS
         ENDDO right_points
 
     END SUBROUTINE calc_compact_matrices
+
 
 END MODULE compact

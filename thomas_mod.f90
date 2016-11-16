@@ -1,7 +1,7 @@
 MODULE Thomas_suite
 
     PRIVATE
-    PUBLIC :: Thomas, cypent
+    PUBLIC :: Thomas, cypent, pentdag
 
 CONTAINS
 
