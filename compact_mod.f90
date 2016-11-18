@@ -291,11 +291,13 @@ CONTAINS
                         cmp(i,j,k)%B%lid = -Bband_int(1)
                         cmp(i,j,k)%B%uid = +Bband_int(2)
                         cmp(i,j,k)%B%lb  = [1, k-1]
+                        cmp(i,j,k)%B%lb(1) = cmp(i,j,k)%A%lb(2)        ! this corrects column indices
                         cmp(i,j,k)%B%ub  = [Neq(i,j,k), Neq(i,j,k) + cmp(i,j,k)%B%uid + cmp(i,j,k)%B%lid - 1 &
                                                         - logical2integer(j==1)*logical2integer(k==1)        &
                                                         - logical2integer(j==2)*logical2integer(k==1)] ! FIXME: una modifica è richiesta dalla derivata 2a per via del duplice significato
                                                                                                        ! dell'indice di staggering 2 (f2f e f2c); l'altra, invece, è dovuta all'inclusione
                                                                                                        ! dei valori di bordo tra le incognite della derivazione prima (ANOMALO).
+                        cmp(i,j,k)%B%ub(1) = cmp(i,j,k)%A%ub(2)        ! this corrects column indices
                         ALLOCATE(cmp(i,j,k)%B%matrix(cmp(i,j,k)%B%lb(1):cmp(i,j,k)%B%ub(1), -cmp(i,j,k)%B%ld:+cmp(i,j,k)%B%ud))
                         CALL MPI_RECV(cmp(i,j,k)%B%matrix, (Bband_tot(2) - Bband_int(1) + 1)*Neq(i,j,k), &
                                         & MPI_DOUBLE_PRECISION, 0, 12, MPI_COMM_WORLD, MPI_STATUS_IGNORE, ierr)

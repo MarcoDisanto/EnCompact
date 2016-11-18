@@ -68,8 +68,8 @@ CONTAINS
                     a1end => SPK(i,j,k)%a1end   ! pointer to the spikes
                     ALLOCATE(delta(N, 2))       ! first and last column of the identity matrix
                     delta = 0                   ! ... already multiplied...
-                    delta(1,1) = A%matrix(1,-1) ! ... by alpha...FIXME
-                    delta(N,2) = A%matrix(N,+1) ! ... and beta
+                    delta(1,1) = A%matrix(A%lb(1),-1) ! ... by alpha...
+                    delta(N,2) = A%matrix(A%ub(1),+1) ! ... and beta
                     CALL Thomas(A%matrix, delta(:,1), a1end(:,1)) ! solution for left  spike
                     CALL Thomas(A%matrix, delta(:,2), a1end(:,2)) ! solution for right spike
                     DEALLOCATE(delta)           ! deallocation
@@ -324,14 +324,6 @@ END IF
 !!!!!!!!! Partial solution (often denoted as psi0) !!!!!!!!!!
 bq = Bp*q
 CALL Thomas(Ap%matrix, bq, psi)
-
-!IF (myid==0) PRINT *, q
-!IF (myid==0) PRINT *, ''
-!IF (myid==0) CALL printmatrix(Bp%matrix)
-!IF (myid==0) PRINT *, lbound(q,1), ubound(q,1)
-!IF (myid==0) PRINT *, ''
-!IF (myid==0) PRINT *, bq
-
 
 !!!!!!!!!! Master process gathers required data !!!!!!!!!!
 ! Type creation

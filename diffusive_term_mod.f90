@@ -53,27 +53,27 @@ SUBROUTINE diff_calc
   REAL               :: r = 0.0, NaN ! r is a dummy real used to define a NaN of type real
   NaN = IEEE_VALUE(r, IEEE_QUIET_NAN) ! NaN of the same type as r
 
-  !for_each_component: DO ic = 1, nn
-ic = 2
+  for_each_component: DO ic = 1, nn
+
     ! Debugging allocation
-    diffvel(ic)%values = 0
+    diffvel(ic)%values = NaN
 
     !!!!!!!!!! x derivatives !!!!!!!!!!
-    !id = 1
-    !istag = logical2integer(id==ic)+1
-    !ALLOCATE(q(uvwp(ic)%b_bo(id, 1):uvwp(ic)%b_bo(id, 2)))
-    !ALLOCATE(psi(uvwp(ic)%b(id, 1):uvwp(ic)%b(id, 2)))
-    !DO j = diffvel(ic)%b(2, 1), diffvel(ic)%b(2, 2)
-    !  DO k = diffvel(ic)%b(3, 1), diffvel(ic)%b(3, 2)
+    id = 1
+    istag = logical2integer(id==ic)+1
+    ALLOCATE(q(uvwp(ic)%b_bo(id, 1):uvwp(ic)%b_bo(id, 2)))
+    ALLOCATE(psi(uvwp(ic)%b(id, 1):uvwp(ic)%b(id, 2)))
+    DO j = diffvel(ic)%b(2, 1), diffvel(ic)%b(2, 2)
+      DO k = diffvel(ic)%b(3, 1), diffvel(ic)%b(3, 2)
 
-    !    q = uvwp(ic)%values(:, j, k)
-    !    CALL SPIKE_solve(id, ider, istag, psi, q)
-    !    diffvel(ic)%values(:, j, k) = psi
+        q = uvwp(ic)%values(:, j, k)
+        CALL SPIKE_solve(id, ider, istag, psi, q)
+        diffvel(ic)%values(:, j, k) = psi
 
-    !  END DO
-    !END DO
-    !DEALLOCATE(q)
-    !DEALLOCATE(psi)
+      END DO
+    END DO
+    DEALLOCATE(q)
+    DEALLOCATE(psi)
 
     !!!!!!!!!! y derivatives !!!!!!!!!!
     id = 2
@@ -109,7 +109,7 @@ ic = 2
     DEALLOCATE(q)
     DEALLOCATE(psi)
 
-  !END DO for_each_component
+  END DO for_each_component
 
 
 END SUBROUTINE diff_calc
