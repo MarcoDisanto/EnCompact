@@ -232,39 +232,44 @@ CONTAINS
     ! Subroutine that interpolates and multiply velocities to put into velvel block
     USE SPIKE
     USE essentials
+    USE bandedmatrix
+    USE Thomas_suite
+    USE, INTRINSIC :: IEEE_ARITHMETIC ! to use IEEE routines
 
     IMPLICIT NONE
 
     INTEGER :: ic, id, ider = 0, istag
     INTEGER :: j, k
     REAL, DIMENSION(:), ALLOCATABLE :: q
+    REAL                            :: r = 0.0, NaN
+    NaN = IEEE_VALUE(r, IEEE_QUIET_NAN) ! NaN of the same type as r
 
-    !for_each_component: DO ic = 1, nn
 
       !!!!!!!!!! x interpolation !!!!!!!!!!
       id = 1
       ! homogeneus products
       ic = id
       istag = 2
+      !velvel(1, id)%values = NaN
       ! FIXME cercare di evitare tutte queste allocazioni e deallocazioni
       ALLOCATE(q(cmp(id, ider, istag)%B%lb(2):cmp(id, ider, istag)%B%ub(2)))
       DO j = velvel(1, id)%b(2, 1), velvel(1, id)%b(2, 2)
         DO k = velvel(1, id)%b(3, 1), velvel(1, id)%b(3, 2)
+
           q = uvwp(ic)%values(cmp(id, ider, istag)%B%lb(2):cmp(id, ider, istag)%B%ub(2), j, k)
-          CALL SPIKE_solve(id, ider, istag, &
-                           velvel(1, id)%values(velvel(1, id)%b(id, 1) : velvel(1, id)%b(id, 2), j, k), &
-                           q)
+          CALL Thomas(cmp(id, ider, istag)%A%matrix, &
+                      cmp(id, ider, istag)%B*q     , &
+                      velvel(1, id)%values(velvel(1, id)%b(id, 1) : velvel(1, id)%b(id, 2), j, k))
+
         END DO
       END DO
       DEALLOCATE(q)
+      CALL SPIKE_solve2(id, ider, istag, velvel(1, id)%values(velvel(1, id)%b(id, 1) : velvel(1, id)%b(id, 2), :, :))
       ! need to add boundary values
       IF (mycoords(id)==0) THEN
         velvel(1, id)%values(velvel(1, id)%b_bo(1, 1), &
                              velvel(1, id)%b(2, 1):velvel(1, id)%b(2, 2), &
                              velvel(1, id)%b(3, 1):velvel(1, id)%b(3, 2)) = &
-        uvwp(ic)%values(uvwp(ic)%b_bo(1, 1), &
-                        velvel(1, id)%b(2, 1):velvel(1, id)%b(2, 2), &
-                        velvel(1, id)%b(3, 1):velvel(1, id)%b(3, 2))*&
         uvwp(ic)%values(uvwp(ic)%b_bo(1, 1), &
                         velvel(1, id)%b(2, 1):velvel(1, id)%b(2, 2), &
                         velvel(1, id)%b(3, 1):velvel(1, id)%b(3, 2))
@@ -275,72 +280,77 @@ CONTAINS
                              velvel(1, id)%b(3, 1):velvel(1, id)%b(3, 2)) = &
         uvwp(ic)%values(uvwp(ic)%b_bo(1, 2), &
                         velvel(1, id)%b(2, 1):velvel(1, id)%b(2, 2), &
-                        velvel(1, id)%b(3, 1):velvel(1, id)%b(3, 2))*&
-        uvwp(ic)%values(uvwp(ic)%b_bo(1, 2), &
-                        velvel(1, id)%b(2, 1):velvel(1, id)%b(2, 2), &
                         velvel(1, id)%b(3, 1):velvel(1, id)%b(3, 2))
       END IF
 
       ! v on u nodes (for uv calculation)
       ic = 2
       istag = 1
+      !intvel(id)%values = NaN
       ALLOCATE(q(cmp(id, ider, istag)%B%lb(2):cmp(id, ider, istag)%B%ub(2)))
-      DO j = intvel(id)%b_bo(2, 1), intvel(id)%b_bo(2, 2)
+      DO j = intvel(id)%b(2, 1), intvel(id)%b(2, 2)
         DO k = intvel(id)%b(3, 1), intvel(id)%b(3, 2)
+
           q = uvwp(ic)%values(cmp(id, ider, istag)%B%lb(2):cmp(id, ider, istag)%B%ub(2), j, k)
-          CALL SPIKE_solve(id, ider, istag, &
-                           intvel(id)%values(intvel(id)%b(id, 1) : intvel(id)%b(id, 2), j, k), &
-                           q)
+          CALL Thomas(cmp(id, ider, istag)%A%matrix, &
+                      cmp(id, ider, istag)%B*q     , &
+                      intvel(id)%values(intvel(id)%b(id, 1) : intvel(id)%b(id, 2), j, k))
+
         END DO
       END DO
       DEALLOCATE(q)
+      CALL SPIKE_solve2(id, ider, istag, intvel(id)%values(intvel(id)%b(id, 1) : intvel(id)%b(id, 2), :, :))
       ! need to add boundary values
       IF (mycoords(id)==0) THEN
         intvel(id)%values(intvel(id)%b_bo(1, 1), &
-                          intvel(id)%b_bo(2, 1):intvel(id)%b_bo(2, 2), &
+                          intvel(id)%b(2, 1):intvel(id)%b(2, 2), &
                           intvel(id)%b(3, 1):intvel(id)%b(3, 2)) = &
         uvwp(ic)%values(uvwp(ic)%b_bo(1, 1), &
-                        intvel(id)%b_bo(2, 1):intvel(id)%b_bo(2, 2), &
+                        intvel(id)%b(2, 1):intvel(id)%b(2, 2), &
                         intvel(id)%b(3, 1):intvel(id)%b(3, 2))
       END IF
       IF (mycoords(id)==dims(id)-1) THEN
         intvel(id)%values(intvel(id)%b_bo(1, 2), &
-                          intvel(id)%b_bo(2, 1):intvel(id)%b_bo(2, 2), &
+                          intvel(id)%b(2, 1):intvel(id)%b(2, 2), &
                           intvel(id)%b(3, 1):intvel(id)%b(3, 2)) = &
         uvwp(ic)%values(uvwp(ic)%b_bo(1, 2), &
-                        intvel(id)%b_bo(2, 1):intvel(id)%b_bo(2, 2), &
+                        intvel(id)%b(2, 1):intvel(id)%b(2, 2), &
                         intvel(id)%b(3, 1):intvel(id)%b(3, 2))
       END IF
 
       ! w on u nodes (for wu calculation)
       ic = 3
       istag = 1
+      !velvel(2, ic)%values = NaN
       ALLOCATE(q(cmp(id, ider, istag)%B%lb(2):cmp(id, ider, istag)%B%ub(2)))
       DO j = velvel(2, ic)%b(2, 1), velvel(2, ic)%b(2, 2)
-        DO k = velvel(2, ic)%b_bo(3, 1), velvel(2, ic)%b_bo(3, 2)
+        DO k = velvel(2, ic)%b(3, 1), velvel(2, ic)%b(3, 2)
+
           q = uvwp(ic)%values(cmp(id, ider, istag)%B%lb(2):cmp(id, ider, istag)%B%ub(2), j, k)
-          CALL SPIKE_solve(id, ider, istag, &
-                           velvel(2, ic)%values(velvel(2, ic)%b(id, 1) : velvel(2, ic)%b(id, 2), j, k), &
-                           q)
+          CALL Thomas(cmp(id, ider, istag)%A%matrix, &
+                      cmp(id, ider, istag)%B*q     , &
+                      velvel(2, ic)%values(velvel(2, ic)%b(id, 1) : velvel(2, ic)%b(id, 2), j, k))
+
         END DO
       END DO
       DEALLOCATE(q)
+      CALL SPIKE_solve2(id, ider, istag, velvel(2, ic)%values(velvel(2, ic)%b(id, 1) : velvel(2, ic)%b(id, 2), :, :))
       ! need to add boundary values
       IF (mycoords(id)==0) THEN
         velvel(2, ic)%values(velvel(2, ic)%b_bo(1, 1), &
                           velvel(2, ic)%b(2, 1):velvel(2, ic)%b(2, 2), &
-                          velvel(2, ic)%b_bo(3, 1):velvel(2, ic)%b_bo(3, 2)) = &
+                          velvel(2, ic)%b(3, 1):velvel(2, ic)%b(3, 2)) = &
         uvwp(ic)%values(uvwp(ic)%b_bo(1, 1), &
                         velvel(2, ic)%b(2, 1):velvel(2, ic)%b(2, 2), &
-                        velvel(2, ic)%b_bo(3, 1):velvel(2, ic)%b_bo(3, 2))
+                        velvel(2, ic)%b(3, 1):velvel(2, ic)%b(3, 2))
       END IF
       IF (mycoords(id)==dims(id)-1) THEN
         velvel(2, ic)%values(velvel(2, ic)%b_bo(1, 2), &
                           velvel(2, ic)%b(2, 1):velvel(2, ic)%b(2, 2), &
-                          velvel(2, ic)%b_bo(3, 1):velvel(2, ic)%b_bo(3, 2)) = &
+                          velvel(2, ic)%b(3, 1):velvel(2, ic)%b(3, 2)) = &
         uvwp(ic)%values(uvwp(ic)%b_bo(1, 2), &
                         velvel(2, ic)%b(2, 1):velvel(2, ic)%b(2, 2), &
-                        velvel(2, ic)%b_bo(3, 1):velvel(2, ic)%b_bo(3, 2))
+                        velvel(2, ic)%b(3, 1):velvel(2, ic)%b(3, 2))
       END IF
 
 
@@ -350,25 +360,26 @@ CONTAINS
       ! homogeneus products
       ic = id
       istag = 2
+      !velvel(1, id)%values = NaN
       ! FIXME cercare di evitare tutte queste allocazioni e deallocazioni
       ALLOCATE(q(cmp(id, ider, istag)%B%lb(2):cmp(id, ider, istag)%B%ub(2)))
       DO j = velvel(1, id)%b(1, 1), velvel(1, id)%b(1, 2)
         DO k = velvel(1, id)%b(3, 1), velvel(1, id)%b(3, 2)
+
           q = uvwp(ic)%values(j, cmp(id, ider, istag)%B%lb(2):cmp(id, ider, istag)%B%ub(2), k)
-          CALL SPIKE_solve(id, ider, istag, &
-                           velvel(1, id)%values(j, velvel(1, id)%b(id, 1) :velvel(1, id)%b(id, 2), k), &
-                           q)
+          CALL Thomas(cmp(id, ider, istag)%A%matrix, &
+                      cmp(id, ider, istag)%B*q     , &
+                      velvel(1, id)%values(j, velvel(1, id)%b(id, 1) :velvel(1, id)%b(id, 2), k))
+
         END DO
       END DO
       DEALLOCATE(q)
+      CALL SPIKE_solve2(id, ider, istag, velvel(1, id)%values(:, velvel(1, id)%b(id, 1) : velvel(1, id)%b(id, 2), :))
       ! need to add boundary values
       IF (mycoords(id)==0) THEN
         velvel(1, id)%values(velvel(1, id)%b(1, 1):velvel(1, id)%b(1, 2), &
                              velvel(1, id)%b_bo(2, 1), &
                              velvel(1, id)%b(3, 1):velvel(1, id)%b(3, 2)) = &
-        uvwp(ic)%values(velvel(1, id)%b(1, 1):velvel(1, id)%b(1, 2), &
-                        uvwp(ic)%b_bo(2, 1), &
-                        velvel(1, id)%b(3, 1):velvel(1, id)%b(3, 2))*&
         uvwp(ic)%values(velvel(1, id)%b(1, 1):velvel(1, id)%b(1, 2), &
                         uvwp(ic)%b_bo(2, 1), &
                         velvel(1, id)%b(3, 1):velvel(1, id)%b(3, 2))
@@ -379,70 +390,75 @@ CONTAINS
                              velvel(1, id)%b(3, 1):velvel(1, id)%b(3, 2)) = &
         uvwp(ic)%values(velvel(1, id)%b(1, 1):velvel(1, id)%b(1, 2), &
                         uvwp(ic)%b_bo(2, 2), &
-                        velvel(1, id)%b(3, 1):velvel(1, id)%b(3, 2))*&
-        uvwp(ic)%values(velvel(1, id)%b(1, 1):velvel(1, id)%b(1, 2), &
-                        uvwp(ic)%b_bo(2, 2), &
                         velvel(1, id)%b(3, 1):velvel(1, id)%b(3, 2))
       END IF
 
       ! w on v nodes (for vw calculation)
       ic = 3
       istag = 1
+      !intvel(id)%values = NaN
       ALLOCATE(q(cmp(id, ider, istag)%B%lb(2):cmp(id, ider, istag)%B%ub(2)))
       DO j = intvel(id)%b(1, 1), intvel(id)%b(1, 2)
-        DO k = intvel(id)%b_bo(3, 1), intvel(id)%b_bo(3, 2)
+        DO k = intvel(id)%b(3, 1), intvel(id)%b(3, 2)
+
           q = uvwp(ic)%values(j, cmp(id, ider, istag)%B%lb(2):cmp(id, ider, istag)%B%ub(2), k)
-          CALL SPIKE_solve(id, ider, istag, &
-                           intvel(id)%values(j, intvel(id)%b(id, 1) : intvel(id)%b(id, 2), k), &
-                           q)
+          CALL Thomas(cmp(id, ider, istag)%A%matrix, &
+                      cmp(id, ider, istag)%B*q     , &
+                      intvel(id)%values(j, intvel(id)%b(id, 1) : intvel(id)%b(id, 2), k))
+
         END DO
       END DO
       DEALLOCATE(q)
+      CALL SPIKE_solve2(id, ider, istag, intvel(id)%values(:, intvel(id)%b(id, 1) : intvel(id)%b(id, 2), :))
       ! need to add boundary values
       IF (mycoords(id)==0) THEN
         intvel(id)%values(intvel(id)%b(1, 1):intvel(id)%b(1, 2), &
                              intvel(id)%b_bo(2, 1), &
-                             intvel(id)%b_bo(3, 1):intvel(id)%b_bo(3, 2)) = &
+                             intvel(id)%b(3, 1):intvel(id)%b(3, 2)) = &
         uvwp(ic)%values(intvel(id)%b(1, 1):intvel(id)%b(1, 2), &
                         uvwp(ic)%b_bo(2, 1), &
-                        intvel(id)%b_bo(3, 1):intvel(id)%b_bo(3, 2))
+                        intvel(id)%b(3, 1):intvel(id)%b(3, 2))
       END IF
       IF (mycoords(id)==dims(id)-1) THEN
         intvel(id)%values(intvel(id)%b(1, 1):intvel(id)%b(1, 2), &
                              intvel(id)%b_bo(2, 2), &
-                             intvel(id)%b_bo(3, 1):intvel(id)%b_bo(3, 2)) = &
+                             intvel(id)%b(3, 1):intvel(id)%b(3, 2)) = &
         uvwp(ic)%values(intvel(id)%b(1, 1):intvel(id)%b(1, 2), &
                         uvwp(ic)%b_bo(2, 2), &
-                        intvel(id)%b_bo(3, 1):intvel(id)%b_bo(3, 2))
+                        intvel(id)%b(3, 1):intvel(id)%b(3, 2))
       END IF
 
       ! u on v nodes (for uv calculation)
       ic = 1
       istag = 1
+      !velvel(2, ic)%values = NaN
       ALLOCATE(q(cmp(id, ider, istag)%B%lb(2):cmp(id, ider, istag)%B%ub(2)))
-      DO j = velvel(2, ic)%b_bo(1, 1), velvel(2, ic)%b_bo(1, 2)
+      DO j = velvel(2, ic)%b(1, 1), velvel(2, ic)%b(1, 2)
         DO k = velvel(2, ic)%b(3, 1), velvel(2, ic)%b(3, 2)
+
           q = uvwp(ic)%values(j, cmp(id, ider, istag)%B%lb(2):cmp(id, ider, istag)%B%ub(2), k)
-          CALL SPIKE_solve(id, ider, istag, &
-                           velvel(2, ic)%values(j, velvel(2, ic)%b(id, 1) :velvel(2, ic)%b(id, 2), k), &
-                           q)
+          CALL Thomas(cmp(id, ider, istag)%A%matrix, &
+                      cmp(id, ider, istag)%B*q     , &
+                      velvel(2, ic)%values(j, velvel(2, ic)%b(id, 1) : velvel(2, ic)%b(id, 2), k))
+
         END DO
       END DO
       DEALLOCATE(q)
+      CALL SPIKE_solve2(id, ider, istag, velvel(2, ic)%values(:, velvel(2, ic)%b(id, 1) : velvel(2, ic)%b(id, 2), :))
       ! need to add boundary values
       IF (mycoords(id)==0) THEN
-        velvel(2, ic)%values(velvel(2, ic)%b_bo(1, 1):velvel(2, ic)%b_bo(1, 2), &
+        velvel(2, ic)%values(velvel(2, ic)%b(1, 1):velvel(2, ic)%b(1, 2), &
                              velvel(2, ic)%b_bo(2, 1), &
                              velvel(2, ic)%b(3, 1):velvel(2, ic)%b(3, 2)) = &
-        uvwp(ic)%values(velvel(2, ic)%b_bo(1, 1):velvel(2, ic)%b_bo(1, 2), &
+        uvwp(ic)%values(velvel(2, ic)%b(1, 1):velvel(2, ic)%b(1, 2), &
                         uvwp(ic)%b_bo(2, 1), &
                         velvel(2, ic)%b(3, 1):velvel(2, ic)%b(3, 2))
       END IF
       IF (mycoords(id)==dims(id)-1) THEN
-        velvel(2, ic)%values(velvel(2, ic)%b_bo(1, 1):velvel(2, ic)%b_bo(1, 2), &
+        velvel(2, ic)%values(velvel(2, ic)%b(1, 1):velvel(2, ic)%b(1, 2), &
                              velvel(2, ic)%b_bo(2, 2), &
                              velvel(2, ic)%b(3, 1):velvel(2, ic)%b(3, 2)) = &
-        uvwp(ic)%values(velvel(2, ic)%b_bo(1, 1):velvel(2, ic)%b_bo(1, 2), &
+        uvwp(ic)%values(velvel(2, ic)%b(1, 1):velvel(2, ic)%b(1, 2), &
                         uvwp(ic)%b_bo(2, 2), &
                         velvel(2, ic)%b(3, 1):velvel(2, ic)%b(3, 2))
       END IF
@@ -454,25 +470,26 @@ CONTAINS
       ! homogeneus products
       ic = id
       istag = 2
+      !velvel(1, id)%values = NaN
       ! FIXME cercare di evitare tutte queste allocazioni e deallocazioni
       ALLOCATE(q(cmp(id, ider, istag)%B%lb(2):cmp(id, ider, istag)%B%ub(2)))
       DO j = velvel(1, id)%b(1, 1), velvel(1, id)%b(1, 2)
         DO k = velvel(1, id)%b(2, 1), velvel(1, id)%b(2, 2)
+
           q = uvwp(ic)%values(j, k, cmp(id, ider, istag)%B%lb(2):cmp(id, ider, istag)%B%ub(2))
-          CALL SPIKE_solve(id, ider, istag, &
-                           velvel(1, id)%values(j, k, velvel(1, id)%b(id, 1) :velvel(1, id)%b(id, 2)), &
-                           q)
+          CALL Thomas(cmp(id, ider, istag)%A%matrix, &
+                      cmp(id, ider, istag)%B*q     , &
+                      velvel(1, id)%values(j, k, velvel(1, id)%b(id, 1) : velvel(1, id)%b(id, 2)))
+
         END DO
       END DO
       DEALLOCATE(q)
+      CALL SPIKE_solve2(id, ider, istag, velvel(1, id)%values(:, :, velvel(1, id)%b(id, 1) : velvel(1, id)%b(id, 2)))
       ! need to add boundary values
       IF (mycoords(id)==0) THEN
         velvel(1, id)%values(velvel(1, id)%b(1, 1):velvel(1, id)%b(1, 2), &
                              velvel(1, id)%b(2, 1):velvel(1, id)%b(2, 2), &
                              velvel(1, id)%b_bo(3, 1)) = &
-        uvwp(ic)%values(velvel(1, id)%b(1, 1):velvel(1, id)%b(1, 2), &
-                        velvel(1, id)%b(2, 1):velvel(1, id)%b(2, 2), &
-                        uvwp(ic)%b_bo(3, 1))*&
         uvwp(ic)%values(velvel(1, id)%b(1, 1):velvel(1, id)%b(1, 2), &
                         velvel(1, id)%b(2, 1):velvel(1, id)%b(2, 2), &
                         uvwp(ic)%b_bo(3, 1))
@@ -483,9 +500,6 @@ CONTAINS
                              velvel(1, id)%b_bo(3, 2)) = &
         uvwp(ic)%values(velvel(1, id)%b(1, 1):velvel(1, id)%b(1, 2), &
                         velvel(1, id)%b(2, 1):velvel(1, id)%b(2, 2), &
-                        uvwp(ic)%b_bo(3, 2))*&
-        uvwp(ic)%values(velvel(1, id)%b(1, 1):velvel(1, id)%b(1, 2), &
-                        velvel(1, id)%b(2, 1):velvel(1, id)%b(2, 2), &
                         uvwp(ic)%b_bo(3, 2))
       END IF
 
@@ -493,29 +507,32 @@ CONTAINS
       ic = 1
       istag = 1
       ALLOCATE(q(cmp(id, ider, istag)%B%lb(2):cmp(id, ider, istag)%B%ub(2)))
-      DO j = intvel(id)%b_bo(1, 1), intvel(id)%b_bo(1, 2)
+      DO j = intvel(id)%b(1, 1), intvel(id)%b(1, 2)
         DO k = intvel(id)%b(2, 1), intvel(id)%b(2, 2)
+
           q = uvwp(ic)%values(j, k, cmp(id, ider, istag)%B%lb(2):cmp(id, ider, istag)%B%ub(2))
-          CALL SPIKE_solve(id, ider, istag, &
-                           intvel(id)%values(j, k, intvel(id)%b(id, 1) :intvel(id)%b(id, 2)), &
-                           q)
+          CALL Thomas(cmp(id, ider, istag)%A%matrix, &
+                      cmp(id, ider, istag)%B*q     , &
+                      intvel(id)%values(j, k, intvel(id)%b(id, 1) : intvel(id)%b(id, 2)))
+
         END DO
       END DO
       DEALLOCATE(q)
+      CALL SPIKE_solve2(id, ider, istag, intvel(id)%values(:, :, intvel(id)%b(id, 1) : intvel(id)%b(id, 2)))
       ! need to add boundary values
       IF (mycoords(id)==0) THEN
-        intvel(id)%values(intvel(id)%b_bo(1, 1):intvel(id)%b_bo(1, 2), &
+        intvel(id)%values(intvel(id)%b(1, 1):intvel(id)%b(1, 2), &
                              intvel(id)%b(2, 1):intvel(id)%b(2, 2), &
                              intvel(id)%b_bo(3, 1)) = &
-        uvwp(ic)%values(intvel(id)%b_bo(1, 1):intvel(id)%b_bo(1, 2), &
+        uvwp(ic)%values(intvel(id)%b(1, 1):intvel(id)%b(1, 2), &
                         intvel(id)%b(2, 1):intvel(id)%b(2, 2), &
                         uvwp(ic)%b_bo(3, 1))
       END IF
       IF (mycoords(id)==dims(id)-1) THEN
-        intvel(id)%values(intvel(id)%b_bo(1, 1):intvel(id)%b_bo(1, 2), &
+        intvel(id)%values(intvel(id)%b(1, 1):intvel(id)%b(1, 2), &
                              intvel(id)%b(2, 1):intvel(id)%b(2, 2), &
                              intvel(id)%b_bo(3, 2)) = &
-        uvwp(ic)%values(intvel(id)%b_bo(1, 1):intvel(id)%b_bo(1, 2), &
+        uvwp(ic)%values(intvel(id)%b(1, 1):intvel(id)%b(1, 2), &
                         intvel(id)%b(2, 1):intvel(id)%b(2, 2), &
                         uvwp(ic)%b_bo(3, 2))
       END IF
@@ -523,36 +540,38 @@ CONTAINS
       ! v on w nodes (for vw calculation)
       ic = 2
       istag = 1
+      !velvel(2, ic)%values = NaN
       ALLOCATE(q(cmp(id, ider, istag)%B%lb(2):cmp(id, ider, istag)%B%ub(2)))
       DO j = velvel(2, ic)%b(1, 1), velvel(2, ic)%b(1, 2)
-        DO k = velvel(2, ic)%b_bo(2, 1), velvel(2, ic)%b_bo(2, 2)
+        DO k = velvel(2, ic)%b(2, 1), velvel(2, ic)%b(2, 2)
+
           q = uvwp(ic)%values(j, k, cmp(id, ider, istag)%B%lb(2):cmp(id, ider, istag)%B%ub(2))
-          CALL SPIKE_solve(id, ider, istag, &
-                           velvel(2, ic)%values(j, k, velvel(2, ic)%b(id, 1) :velvel(2, ic)%b(id, 2)), &
-                           q)
+          CALL Thomas(cmp(id, ider, istag)%A%matrix, &
+                      cmp(id, ider, istag)%B*q     , &
+                      velvel(2, ic)%values(j, k, velvel(2, ic)%b(id, 1) : velvel(2, ic)%b(id, 2)))
+
         END DO
       END DO
       DEALLOCATE(q)
+      CALL SPIKE_solve2(id, ider, istag, velvel(2, ic)%values(:, :, velvel(2, ic)%b(id, 1) : velvel(2, ic)%b(id, 2)))
       ! need to add boundary values
       IF (mycoords(id)==0) THEN
         velvel(2, ic)%values(velvel(2, ic)%b(1, 1):velvel(2, ic)%b(1, 2), &
-                             velvel(2, ic)%b_bo(2, 1):velvel(2, ic)%b_bo(2, 2), &
+                             velvel(2, ic)%b(2, 1):velvel(2, ic)%b(2, 2), &
                              velvel(2, ic)%b_bo(3, 1)) = &
         uvwp(ic)%values(velvel(2, ic)%b(1, 1):velvel(2, ic)%b(1, 2), &
-                        velvel(2, ic)%b_bo(2, 1):velvel(2, ic)%b_bo(2, 2), &
+                        velvel(2, ic)%b(2, 1):velvel(2, ic)%b(2, 2), &
                         uvwp(ic)%b_bo(3, 1))
       END IF
       IF (mycoords(id)==dims(id)-1) THEN
         velvel(2, ic)%values(velvel(2, ic)%b(1, 1):velvel(2, ic)%b(1, 2), &
-                             velvel(2, ic)%b_bo(2, 1):velvel(2, ic)%b_bo(2, 2), &
+                             velvel(2, ic)%b(2, 1):velvel(2, ic)%b(2, 2), &
                              velvel(2, ic)%b_bo(3, 2)) = &
         uvwp(ic)%values(velvel(2, ic)%b(1, 1):velvel(2, ic)%b(1, 2), &
-                        velvel(2, ic)%b_bo(2, 1):velvel(2, ic)%b_bo(2, 2), &
+                        velvel(2, ic)%b(2, 1):velvel(2, ic)%b(2, 2), &
                         uvwp(ic)%b_bo(3, 2))
       END IF
 
-
-    !END DO for_each_component
 
   END SUBROUTINE conv_interp
 
@@ -831,18 +850,22 @@ CONTAINS
     ! the results in the convvel block
     USE SPIKE
     USE essentials
+    USE bandedmatrix
+    USE Thomas_suite
     USE, INTRINSIC :: IEEE_ARITHMETIC ! to use IEEE routines
 
     IMPLICIT NONE
 
-    INTEGER :: ic, id, ider = 1, istag
-    INTEGER :: j, k
-    REAL, DIMENSION(:), ALLOCATABLE :: q, psi  ! due to ANOMALIA a solution vector has to be defined
-    REAL               :: r = 0.0, NaN  ! r is a dummy real used to define a NaN of type real
+    INTEGER                               :: ic, id, ider = 1, istag
+    INTEGER                               :: j, k, iii
+    REAL, DIMENSION(:), ALLOCATABLE       :: q, psi  ! due to ANOMALIA a solution vector has to be defined
+    REAL, DIMENSION(:, :, :), ALLOCATABLE :: temp   ! used to temporarily store block-diagonal solution
+    REAL                                  :: r = 0.0, NaN  ! r is a dummy real used to define a NaN of type real
     NaN = IEEE_VALUE(r, IEEE_QUIET_NAN) ! NaN of the same type as r
 
     !!!!!!!!!! Velocity interpolations !!!!!!!!!!
     CALL conv_interp
+
 
     !!!!!!!!!! Velocity multiplication !!!!!!!!!!
     DO ic = 1, ndims
@@ -850,175 +873,219 @@ CONTAINS
       velvel(2, ic)%values = velvel(2, ic)%values*intvel(ic)%values
     END DO
 
+
     !!!!!!!!!! Velocity*velocity communications !!!!!!!!!!
     CALL conv_exchange
+
+    !IF (myid==iii) CALL printmatrix(velvel(2, 1)%values)
 
     !!!!!!!!!! Debugging inizialization !!!!!!!!!!
     DO ic = 1, ndims
       convvel(ic)%values = NaN
     END DO
 
-    !!!!!!!!!! Squared velocity derivation !!!!!!!!!!
+    !!!!!!!!!! Velocity*velocity derivation !!!!!!!!!!
 
-    ! x derivatives
-    id = 1
+                    !!!!! x component !!!!!
+
     ! d(u^2)/dx
+    id = 1
     istag = 1
     ALLOCATE(q(velvel(1, 1)%b_bo(id, 1):velvel(1, 1)%b_bo(id, 2)))
-    ALLOCATE(psi(cmp(id, ider, istag)%A%lb(2):cmp(id, ider, istag)%A%ub(2)))
+    ALLOCATE(temp(cmp(id, ider, istag)%A%ub(2)-cmp(id, ider, istag)%A%lb(2)+1, &
+                  convvel(1)%b(2, 1):convvel(1)%b(2, 2), &
+                  convvel(1)%b(3, 1):convvel(1)%b(3, 2)))
     DO j = convvel(1)%b(2, 1), convvel(1)%b(2, 2)
       DO k = convvel(1)%b(3, 1), convvel(1)%b(3, 2)
 
         q = velvel(1, 1)%values(:, j, k)
-        CALL SPIKE_solve(id, ider, istag, psi, q)
-        ! meglio se poi la fai diventare una somma, piuttosto che un'assegnazione
-        convvel(1)%values(:, j, k) = psi(convvel(1)%b(id, 1):convvel(1)%b(id, 2))
+        CALL Thomas(cmp(id, ider, istag)%A%matrix, &
+                    cmp(id, ider, istag)%B*q     , &
+                    temp(:, j, k))
 
       END DO
     END DO
+    CALL SPIKE_solve2(id, ider, istag, temp)
+    convvel(1)%values = temp(convvel(1)%b(id, 1):convvel(1)%b(id, 2), :, :)
     DEALLOCATE(q)
-    DEALLOCATE(psi)
-    ! d(uv)/dx
-    istag = 2
-    ALLOCATE(q(velvel(2, 1)%b_bo(id, 1):velvel(2, 1)%b_bo(id, 2)))
-    ALLOCATE(psi(cmp(id, ider, istag)%A%lb(2):cmp(id, ider, istag)%A%ub(2)))
-    DO j = convvel(2)%b(2, 1), convvel(2)%b(2, 2)
-      DO k = convvel(2)%b(3, 1), convvel(2)%b(3, 2)
+    DEALLOCATE(temp)
 
-        q = velvel(2, 1)%values(:, j, k)
-        CALL SPIKE_solve(id, ider, istag, psi, q)
-        ! meglio se poi la fai diventare una somma, piuttosto che un'assegnazione
-        convvel(2)%values(:, j, k) = psi(convvel(2)%b(id, 1):convvel(2)%b(id, 2))
 
-      END DO
-    END DO
-    DEALLOCATE(q)
-    DEALLOCATE(psi)
-    ! d(wu)/dx
-    istag = 2
-    ALLOCATE(q(velvel(2, 3)%b_bo(id, 1):velvel(2, 3)%b_bo(id, 2)))
-    ALLOCATE(psi(cmp(id, ider, istag)%A%lb(2):cmp(id, ider, istag)%A%ub(2)))
-    DO j = convvel(3)%b(2, 1), convvel(3)%b(2, 2)
-      DO k = convvel(3)%b(3, 1), convvel(3)%b(3, 2)
-
-        q = velvel(2, 3)%values(:, j, k)
-        CALL SPIKE_solve(id, ider, istag, psi, q)
-        ! meglio se poi la fai diventare una somma, piuttosto che un'assegnazione
-        convvel(3)%values(:, j, k) = psi(convvel(3)%b(id, 1):convvel(3)%b(id, 2))
-
-      END DO
-    END DO
-    DEALLOCATE(q)
-    DEALLOCATE(psi)
-
-    ! y derivatives
-    id = 2
     ! d(uv)/dy
+    id = 2
     istag = 2
     ALLOCATE(q(velvel(2, 1)%b_bo(id, 1):velvel(2, 1)%b_bo(id, 2)))
-    ALLOCATE(psi(cmp(id, ider, istag)%A%lb(2):cmp(id, ider, istag)%A%ub(2)))
+    ALLOCATE(temp(convvel(1)%b(1, 1):convvel(1)%b(1, 2), &
+                  convvel(1)%b(2, 1):convvel(1)%b(2, 2), &
+                  convvel(1)%b(3, 1):convvel(1)%b(3, 2)))
+    temp = NaN
     DO j = convvel(1)%b(1, 1), convvel(1)%b(1, 2)
       DO k = convvel(1)%b(3, 1), convvel(1)%b(3, 2)
 
         q = velvel(2, 1)%values(j, :, k)
-        CALL SPIKE_solve(id, ider, istag, psi, q)
-        ! meglio se poi la fai diventare una somma, piuttosto che un'assegnazione
-        convvel(1)%values(j, :, k) = convvel(1)%values(j, :, k) + &
-                                     psi(convvel(1)%b(id, 1):convvel(1)%b(id, 2))
+        CALL Thomas(cmp(id, ider, istag)%A%matrix, &
+                    cmp(id, ider, istag)%B*q     , &
+                    temp(j, :, k))
 
       END DO
     END DO
+    CALL SPIKE_solve2(id, ider, istag, temp)
+    convvel(1)%values = convvel(1)%values + temp
     DEALLOCATE(q)
-    DEALLOCATE(psi)
-    ! d(v^2)/dy
-    istag = 1
-    ALLOCATE(q(velvel(1, 2)%b_bo(id, 1):velvel(1, 2)%b_bo(id, 2)))
-    ALLOCATE(psi(cmp(id, ider, istag)%A%lb(2):cmp(id, ider, istag)%A%ub(2)))
-    DO j = convvel(2)%b(1, 1), convvel(2)%b(1, 2)
-      DO k = convvel(2)%b(3, 1), convvel(2)%b(3, 2)
 
-        q = velvel(1, 2)%values(j, :, k)
-        CALL SPIKE_solve(id, ider, istag, psi, q)
-        ! meglio se poi la fai diventare una somma, piuttosto che un'assegnazione
-        convvel(2)%values(j, :, k) = convvel(2)%values(j, :, k) + &
-                                     psi(convvel(2)%b(id, 1):convvel(2)%b(id, 2))
 
-      END DO
-    END DO
-    DEALLOCATE(q)
-    DEALLOCATE(psi)
-    ! d(vw)/dy
-    istag = 2
-    ALLOCATE(q(velvel(2, 2)%b_bo(id, 1):velvel(2, 2)%b_bo(id, 2)))
-    ALLOCATE(psi(cmp(id, ider, istag)%A%lb(2):cmp(id, ider, istag)%A%ub(2)))
-    DO j = convvel(3)%b(1, 1), convvel(3)%b(1, 2)
-      DO k = convvel(3)%b(3, 1), convvel(3)%b(3, 2)
-
-        q = velvel(2, 2)%values(j, :, k)
-        CALL SPIKE_solve(id, ider, istag, psi, q)
-        ! meglio se poi la fai diventare una somma, piuttosto che un'assegnazione
-        convvel(3)%values(j, :, k) = convvel(3)%values(j, :, k) + &
-                                     psi(convvel(3)%b(id, 1):convvel(3)%b(id, 2))
-
-      END DO
-    END DO
-    DEALLOCATE(q)
-    DEALLOCATE(psi)
-
-    ! z derivatives
-    id = 3
     ! d(wu)/dz
+    id = 3
     istag = 2
     ALLOCATE(q(velvel(2, 3)%b_bo(id, 1):velvel(2, 3)%b_bo(id, 2)))
-    ALLOCATE(psi(cmp(id, ider, istag)%A%lb(2):cmp(id, ider, istag)%A%ub(2)))
     DO j = convvel(1)%b(1, 1), convvel(1)%b(1, 2)
       DO k = convvel(1)%b(2, 1), convvel(1)%b(2, 2)
 
         q = velvel(2, 3)%values(j, k, :)
-        CALL SPIKE_solve(id, ider, istag, psi, q)
-        ! meglio se poi la fai diventare una somma, piuttosto che un'assegnazione
-        convvel(1)%values(j, k, :) = convvel(1)%values(j, k, :)  + &
-                                     psi(convvel(1)%b(id, 1):convvel(1)%b(id, 2))
+        CALL Thomas(cmp(id, ider, istag)%A%matrix, &
+                    cmp(id, ider, istag)%B*q     , &
+                    temp(j, k, :))
 
       END DO
     END DO
+    CALL SPIKE_solve2(id, ider, istag, temp)
+    convvel(1)%values = convvel(1)%values + temp
     DEALLOCATE(q)
-    DEALLOCATE(psi)
+    DEALLOCATE(temp)
+
+
+                      !!!!! y component !!!!!
+
+    ! d(v^2)/dy
+    id = 2
+    istag = 1
+    ALLOCATE(q(velvel(1, 2)%b_bo(id, 1):velvel(1, 2)%b_bo(id, 2)))
+    ALLOCATE(temp(convvel(2)%b(1, 1):convvel(2)%b(1, 2), &
+                  cmp(id, ider, istag)%A%ub(2)-cmp(id, ider, istag)%A%lb(2)+1, &
+                  convvel(2)%b(3, 1):convvel(2)%b(3, 2)))
+    DO j = convvel(2)%b(1, 1), convvel(2)%b(1, 2)
+      DO k = convvel(2)%b(3, 1), convvel(2)%b(3, 2)
+
+        q = velvel(1, 2)%values(j, :, k)
+        CALL Thomas(cmp(id, ider, istag)%A%matrix, &
+                    cmp(id, ider, istag)%B*q     , &
+                    temp(j, :, k))
+
+      END DO
+    END DO
+    CALL SPIKE_solve2(id, ider, istag, temp)
+    convvel(2)%values = temp(:, convvel(2)%b(id, 1):convvel(2)%b(id, 2), :)
+    DEALLOCATE(q)
+    DEALLOCATE(temp)
+
+
+    ! d(uv)/dx
+    id = 1
+    istag = 2
+    ALLOCATE(q(velvel(2, 1)%b_bo(id, 1):velvel(2, 1)%b_bo(id, 2)))
+    ALLOCATE(temp(convvel(2)%b(1, 1):convvel(2)%b(1, 2), &
+                  convvel(2)%b(2, 1):convvel(2)%b(2, 2), &
+                  convvel(2)%b(3, 1):convvel(2)%b(3, 2)))
+    DO j = convvel(2)%b(2, 1), convvel(2)%b(2, 2)
+      DO k = convvel(2)%b(3, 1), convvel(2)%b(3, 2)
+
+        q = velvel(2, 1)%values(:, j, k)
+        CALL Thomas(cmp(id, ider, istag)%A%matrix, &
+                    cmp(id, ider, istag)%B*q     , &
+                    temp(:, j, k))
+
+      END DO
+    END DO
+    CALL SPIKE_solve2(id, ider, istag, temp)
+    convvel(2)%values = convvel(2)%values + temp
+    DEALLOCATE(q)
+
+
     ! d(vw)/dz
+    id = 3
     istag = 2
     ALLOCATE(q(velvel(2, 2)%b_bo(id, 1):velvel(2, 2)%b_bo(id, 2)))
-    ALLOCATE(psi(cmp(id, ider, istag)%A%lb(2):cmp(id, ider, istag)%A%ub(2)))
     DO j = convvel(2)%b(1, 1), convvel(2)%b(1, 2)
       DO k = convvel(2)%b(2, 1), convvel(2)%b(2, 2)
 
         q = velvel(2, 2)%values(j, k, :)
-        CALL SPIKE_solve(id, ider, istag, psi, q)
-        ! meglio se poi la fai diventare una somma, piuttosto che un'assegnazione
-        convvel(2)%values(j, k, :) = convvel(2)%values(j, k, :)  + &
-                                     psi(convvel(2)%b(id, 1):convvel(2)%b(id, 2))
+        CALL Thomas(cmp(id, ider, istag)%A%matrix, &
+                    cmp(id, ider, istag)%B*q     , &
+                    temp(j, k, :))
 
       END DO
     END DO
+    CALL SPIKE_solve2(id, ider, istag, temp)
+    convvel(2)%values = convvel(2)%values + temp
     DEALLOCATE(q)
-    DEALLOCATE(psi)
+    DEALLOCATE(temp)
+
+
+                    !!!!! z component !!!!!
+
     ! d(w^2)/dz
+    id = 3
     istag = 1
     ALLOCATE(q(velvel(1, 3)%b_bo(id, 1):velvel(1, 3)%b_bo(id, 2)))
-    ALLOCATE(psi(cmp(id, ider, istag)%A%lb(2):cmp(id, ider, istag)%A%ub(2)))
+    ALLOCATE(temp(convvel(3)%b(1, 1):convvel(3)%b(1, 2), &
+                  convvel(3)%b(2, 1):convvel(3)%b(2, 2), &
+                  cmp(id, ider, istag)%A%ub(2)-cmp(id, ider, istag)%A%lb(2)+1))
     DO j = convvel(3)%b(1, 1), convvel(3)%b(1, 2)
       DO k = convvel(3)%b(2, 1), convvel(3)%b(2, 2)
 
         q = velvel(1, 3)%values(j, k, :)
-        CALL SPIKE_solve(id, ider, istag, psi, q)
-        ! meglio se poi la fai diventare una somma, piuttosto che un'assegnazione
-        convvel(3)%values(j, k, :) = convvel(3)%values(j, k, :)  + &
-                                     psi(convvel(3)%b(id, 1):convvel(3)%b(id, 2))
+        CALL Thomas(cmp(id, ider, istag)%A%matrix, &
+                    cmp(id, ider, istag)%B*q     , &
+                    temp(j, k, :))
 
       END DO
     END DO
+    CALL SPIKE_solve2(id, ider, istag, temp)
+    convvel(3)%values = temp(:, :, convvel(3)%b(id, 1):convvel(3)%b(id, 2))
     DEALLOCATE(q)
-    DEALLOCATE(psi)
+    DEALLOCATE(temp)
 
+
+    ! d(wu)/dx
+    id = 1
+    istag = 2
+    ALLOCATE(q(velvel(2, 3)%b_bo(id, 1):velvel(2, 3)%b_bo(id, 2)))
+    ALLOCATE(temp(convvel(3)%b(1, 1):convvel(3)%b(1, 2), &
+                  convvel(3)%b(2, 1):convvel(3)%b(2, 2), &
+                  convvel(3)%b(3, 1):convvel(3)%b(3, 2)))
+    DO j = convvel(3)%b(2, 1), convvel(3)%b(2, 2)
+      DO k = convvel(3)%b(3, 1), convvel(3)%b(3, 2)
+
+        q = velvel(2, 3)%values(:, j, k)
+        CALL Thomas(cmp(id, ider, istag)%A%matrix, &
+                    cmp(id, ider, istag)%B*q     , &
+                    temp(:, j, k))
+
+      END DO
+    END DO
+    CALL SPIKE_solve2(id, ider, istag, temp)
+    convvel(3)%values = convvel(3)%values + temp
+    DEALLOCATE(q)
+
+
+    ! d(vw)/dy
+    id = 2
+    istag = 2
+    ALLOCATE(q(velvel(2, 2)%b_bo(id, 1):velvel(2, 2)%b_bo(id, 2)))
+    DO j = convvel(3)%b(1, 1), convvel(3)%b(1, 2)
+      DO k = convvel(3)%b(3, 1), convvel(3)%b(3, 2)
+
+        q = velvel(2, 2)%values(j, :, k)
+        CALL Thomas(cmp(id, ider, istag)%A%matrix, &
+                    cmp(id, ider, istag)%B*q     , &
+                    temp(j, :, k))
+
+      END DO
+    END DO
+    CALL SPIKE_solve2(id, ider, istag, temp)
+    convvel(3)%values = convvel(3)%values + temp
+    DEALLOCATE(q)
+    DEALLOCATE(temp)
 
 
   END SUBROUTINE conv_calc

@@ -1,10 +1,10 @@
-MODULE IC_and_BC 
+MODULE IC_and_BC
 ! This module contains the following procedures
 !    SUBROUTINE set_bc
 !    SUBROUTINE assign_bc_i_3D(blocks, faceid)
 !    SUBROUTINE set_face_condition(ndims_array, idf)
 !    SUBROUTINE set_ic
-        
+
     USE MPI, ONLY : MPI_COMM_WORLD
 
     IMPLICIT NONE
@@ -27,7 +27,7 @@ MODULE IC_and_BC
 
     ! Make public only a few stuff
     PRIVATE
-    PUBLIC :: set_bc, set_ic, uvw_BC
+    PUBLIC :: set_bc, set_ic, uvw_BC, set_conv_bc
 
 CONTAINS
 
@@ -53,7 +53,7 @@ CONTAINS
                 ! id-th direction; assign the boundary condition, to the
                 ! velocity (the 1st, 2nd and 3rd components of uvwp).
                 CALL assign_bc_i(uvwp(1:ndims), -id)
-                
+
             END IF if_touches_minus_side
 
             if_touches_plus_side: IF (idp(id) == MPI_PROC_NULL) THEN
@@ -114,28 +114,28 @@ CONTAINS
 
         CASE (-2) ! Down face
             DO ic = 1, ndims
-                flats(ic)%values => blocks(ic)%values(blocks(ic)%b_bc(1,1):blocks(ic)%b_bc(1,2), & 
+                flats(ic)%values => blocks(ic)%values(blocks(ic)%b_bc(1,1):blocks(ic)%b_bc(1,2), &
                                                     & blocks(ic)%b_bc(2,1), &
                                                     & blocks(ic)%b_bc(3,1):blocks(ic)%b_bc(3,2))
             END DO
 
         CASE (+2) ! Up face
             DO ic = 1, ndims
-                flats(ic)%values => blocks(ic)%values(blocks(ic)%b_bc(1,1):blocks(ic)%b_bc(1,2), & 
+                flats(ic)%values => blocks(ic)%values(blocks(ic)%b_bc(1,1):blocks(ic)%b_bc(1,2), &
                                                     &                      blocks(ic)%b_bc(2,2), &
                                                     & blocks(ic)%b_bc(3,1):blocks(ic)%b_bc(3,2))
             END DO
 
         CASE (-3) ! Back face
             DO ic = 1, ndims
-                flats(ic)%values => blocks(ic)%values(blocks(ic)%b_bc(1,1):blocks(ic)%b_bc(1,2), & 
+                flats(ic)%values => blocks(ic)%values(blocks(ic)%b_bc(1,1):blocks(ic)%b_bc(1,2), &
                                                     & blocks(ic)%b_bc(2,1):blocks(ic)%b_bc(2,2), &
                                                     & blocks(ic)%b_bc(3,1))
             END DO
 
         CASE (+3) ! Front face
             DO ic = 1, ndims
-                flats(ic)%values => blocks(ic)%values(blocks(ic)%b_bc(1,1):blocks(ic)%b_bc(1,2), & 
+                flats(ic)%values => blocks(ic)%values(blocks(ic)%b_bc(1,1):blocks(ic)%b_bc(1,2), &
                                                     & blocks(ic)%b_bc(2,1):blocks(ic)%b_bc(2,2), &
                                                     &                      blocks(ic)%b_bc(3,2))
             END DO
@@ -149,7 +149,7 @@ CONTAINS
         END SELECT select_face
 
         CALL set_face_condition(flats, faceid)
-        
+
     END SUBROUTINE assign_bc_i_3D
 
 
@@ -191,7 +191,7 @@ CONTAINS
         USE essentials, ONLY : log2int => logical2integer, KronDelta
         USE, INTRINSIC :: IEEE_ARITHMETIC ! to use IEEE routines
         ! such as IEEE_QUIET_NAN, IEEE_POSITIVE_INF, IEEE_NEGATIVE_INF
-    
+
         IMPLICIT NONE
 
         ! internal variables
@@ -206,10 +206,100 @@ CONTAINS
             uvwp(iv)%values = NaN
             uvwp(iv)%values(uvwp(iv)%b(1,1):uvwp(iv)%b(1,2), &
                           & uvwp(iv)%b(2,1):uvwp(iv)%b(2,2), &
-                          & uvwp(iv)%b(3,1):uvwp(iv)%b(3,2)) = myid
+                          & uvwp(iv)%b(3,1):uvwp(iv)%b(3,2)) = 0*myid
 
         END DO zero_ic
 
     END SUBROUTINE set_ic
+
+
+    SUBROUTINE set_conv_bc
+
+      USE convective_term, ONLY: intvel, velvel
+      USE MPI_module, ONLY: myid, mycoords, dims
+
+      IMPLICIT NONE
+
+      INTEGER :: i, j
+
+      !!!!! u on x minus border !!!!!
+      i = 1
+      IF (mycoords(i)==0) THEN
+        velvel(2, i)%values(velvel(2, i)%b_bc(1, 1), &
+                            velvel(2, i)%b(2, 1) : velvel(2, i)%b(2, 2), &
+                            velvel(2, i)%b(3, 1) : velvel(2, i)%b(3, 2)) = 0
+
+        intvel(3)%values(intvel(3)%b_bc(1, 1), &
+                         intvel(3)%b(2, 1) : intvel(3)%b(2, 2), &
+                         intvel(3)%b(3, 1) : intvel(3)%b(3, 2)) = 0
+
+      END IF
+      !!!!! u on x plus border !!!!!
+      i = 1
+      IF (mycoords(i)==dims(i)-1) THEN
+        velvel(2, i)%values(velvel(2, i)%b_bc(1, 2), &
+                            velvel(2, i)%b(2, 1) : velvel(2, i)%b(2, 2), &
+                            velvel(2, i)%b(3, 1) : velvel(2, i)%b(3, 2)) = 0
+
+        intvel(3)%values(intvel(3)%b_bc(1, 2), &
+                         intvel(3)%b(2, 1) : intvel(3)%b(2, 2), &
+                         intvel(3)%b(3, 1) : intvel(3)%b(3, 2)) = 0
+
+      END IF
+
+      !!!!! v on y minus border !!!!!
+      i = 2
+      IF (mycoords(i)==0) THEN
+        velvel(2, i)%values(velvel(2, i)%b(1, 1) : velvel(2, i)%b(1, 2), &
+                            velvel(2, i)%b_bc(2, 1), &
+                            velvel(2, i)%b(3, 1) : velvel(2, i)%b(3, 2)) = 0
+
+        intvel(1)%values(intvel(1)%b(1, 1) : intvel(1)%b(1, 2), &
+                         intvel(1)%b_bc(2, 1), &
+                         intvel(1)%b(3, 1) : intvel(1)%b(3, 2)) = 0
+      END IF
+      !!!!! v on y minus border !!!!!
+      i = 2
+      IF (mycoords(i)==dims(i)-1) THEN
+        velvel(2, i)%values(velvel(2, i)%b(1, 1) : velvel(2, i)%b(1, 2), &
+                            velvel(2, i)%b_bc(2, 2), &
+                            velvel(2, i)%b(3, 1) : velvel(2, i)%b(3, 2)) = 0
+
+        intvel(1)%values(intvel(1)%b(1, 1) : intvel(1)%b(1, 2), &
+                         intvel(1)%b_bc(2, 2), &
+                         intvel(1)%b(3, 1) : intvel(1)%b(3, 2)) = 0
+      END IF
+
+      !!!!! w on z minus border !!!!!
+      i = 3
+      IF (mycoords(i)==0) THEN
+        velvel(2, i)%values(velvel(2, i)%b(1, 1) : velvel(2, i)%b(1, 2), &
+                            velvel(2, i)%b(2, 1) : velvel(2, i)%b(2, 2), &
+                            velvel(2, i)%b_bc(3, 1)) = 0
+
+        intvel(2)%values(intvel(2)%b(1, 1) : intvel(2)%b(1, 2), &
+                         intvel(2)%b(2, 1) : intvel(2)%b(2, 2), &
+                         intvel(2)%b_bc(3, 1)) = 0
+      END IF
+
+      !!!!! w on z minus border !!!!!
+      i = 3
+      IF (mycoords(i)==dims(i)-1) THEN
+        velvel(2, i)%values(velvel(2, i)%b(1, 1) : velvel(2, i)%b(1, 2), &
+                            velvel(2, i)%b(2, 1) : velvel(2, i)%b(2, 2), &
+                            velvel(2, i)%b_bc(3, 2)) = 0
+
+        intvel(2)%values(intvel(2)%b(1, 1) : intvel(2)%b(1, 2), &
+                         intvel(2)%b(2, 1) : intvel(2)%b(2, 2), &
+                         intvel(2)%b_bc(3, 2)) = 0
+      END IF
+
+
+    END SUBROUTINE set_conv_bc
+
+
+
+
+
 
 END MODULE IC_and_BC

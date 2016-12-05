@@ -303,7 +303,6 @@ REAL, DIMENSION(:, :), POINTER                :: Cp                 ! SPIKE matr
 INTEGER                                       :: ierr
 REAL                                          :: dum                ! temporary storage used to support elements reordering
 INTEGER                                       :: i
-!TYPE(JDS)                                     :: Bjds
 
 ! Define NaN
 REAL :: r = 0.0, NaN ! r is a dummy real used to define a NaN of type real
@@ -368,6 +367,306 @@ ELSE
 END IF
 
 END SUBROUTINE SPIKE_solve
+
+
+
+
+
+
+
+SUBROUTINE SPIKE_solve2(id, ider, istag, PSI)
+! This is an evolution of previous "SPIKE_solve" subroutine, that works on blocks instead
+! of lines of nodes. Its role is to correct the previously calculated (input argument
+! PSI) solution of the block-diagonal system. Compared to the previous version, this
+! one is much faster since it communicates a bunch of values with a single call,
+! thus using the BUS as little as possible.
+
+USE compact, ONLY: compact_type, cmp
+USE essentials
+USE bandedmatrix
+USE MPI_module
+USE Thomas_suite
+USE, INTRINSIC :: IEEE_ARITHMETIC
+
+IMPLICIT NONE
+
+INTEGER, INTENT(IN)                           :: id, ider, istag    ! indices for direction, order of derivative and staggering (see compact_mod)
+REAL, DIMENSION(:, :, :), INTENT(INOUT)       :: PSI                ! solution block to be updated after calculating coupling terms
+REAL, DIMENSION(:, :, :), ALLOCATABLE         :: PSIC               ! vectors of coupled unknowns (only master process has to allocate it)
+REAL, DIMENSION(:, :, :), ALLOCATABLE         :: PSI0C              ! RHS of reduced system (only master process has to allocate it)
+REAL, DIMENSION(:, :), POINTER                :: Cp                 ! SPIKE matrix pointer (just to simplify notation)
+REAL, DIMENSION(:, :), ALLOCATABLE            :: dum                ! temporary storage used to support elements reordering
+INTEGER                                       :: i, j, k            ! just indices used to move along 3 directions
+INTEGER, DIMENSION(ndims)                     :: dmn                ! dimensions used for various allocations
+! type construction stuff
+INTEGER                                       :: MPI_1slab_type, MPI_1slab_res, MPI_2slab_type
+INTEGER                                       :: MPI_gather_type, MPI_gather_type_res
+INTEGER, DIMENSION(ndims)                     :: array_of_sizes
+INTEGER, DIMENSION(ndims)                     :: array_of_subsizes
+INTEGER, DIMENSION(ndims)                     :: array_of_starts
+INTEGER(MPI_ADDRESS_KIND)                     :: lb, ext            ! lower bound and extent of MPI types
+INTEGER                                       :: dblsz              ! size in bytes of a DOUBLE PRECISION type
+INTEGER                                       :: ierr
+
+! Define NaN
+REAL :: r = 0.0, NaN ! r is a dummy real used to define a NaN of type real
+NaN = IEEE_VALUE(r, IEEE_QUIET_NAN) ! NaN of the same type as r
+
+!!!!!!!!!! Type creation and allocations !!!!!!!!!!
+! Sender side (slave processes)
+array_of_sizes = SHAPE(PSI)
+array_of_starts = [0, 0, 0]
+DO i = 1, ndims
+  array_of_subsizes(i) = KronDelta(i, id) + (1-KronDelta(i, id))*SIZE(PSI, i)
+END DO
+! 1 element thick slab definition
+CALL MPI_TYPE_CREATE_SUBARRAY(ndims, &
+                            & array_of_sizes, array_of_subsizes, array_of_starts, &
+                            & MPI_ORDER_FORTRAN, &
+                            & MPI_DOUBLE_PRECISION, MPI_1slab_type, &
+                            & ierr)
+! the following resizing deceives the code into believing the type to be shorter
+! than it actually is. Thank MPI guys for this s**t
+CALL MPI_TYPE_SIZE(MPI_DOUBLE_PRECISION, dblsz, ierr)
+lb = 0
+ext = dblsz*( KronDelta(id, 1) + KronDelta(id, 2)*SIZE(PSI, 1) + KronDelta(id, 3)*SIZE(PSI, 1)*SIZE(PSI, 2) )
+CALL MPI_TYPE_CREATE_RESIZED(MPI_1slab_type, lb, ext, MPI_1slab_res, ierr)
+! put together first and last plates of the block
+CALL MPI_TYPE_VECTOR(2, 1, SIZE(PSI, id)-1, MPI_1slab_res, MPI_2slab_type, ierr)
+CALL MPI_TYPE_COMMIT(MPI_2slab_type, ierr)
+
+! Receiver side (master process)
+! only the master process needs all the values of psiC (reduced system solution);
+! the slave ones require only 2 values (or plates in this case)
+DO i = 1, ndims
+  dmn(i) = KronDelta(i, id)*dims(id)*2*logical2integer(mycoords(id)==0) + &
+           KronDelta(i, id)*2*logical2integer(mycoords(id)/=0) + &
+          (1-KronDelta(i, id))*SIZE(PSI, i)
+END DO
+ALLOCATE(PSIC(dmn(1), dmn(2), dmn(3)))
+ALLOCATE(PSI0C(dmn(1), dmn(2), dmn(3)))
+
+! cannot recycle previous plate type, for PSIC is smaller than PSI
+array_of_sizes = SHAPE(PSI0C)
+DO i = 1, ndims
+  array_of_subsizes(i) = KronDelta(i, id) + (1-KronDelta(i, id))*SIZE(PSI, i)
+END DO
+! 1 element thick slab definition
+CALL MPI_TYPE_CREATE_SUBARRAY(ndims, &
+                            & array_of_sizes, array_of_subsizes, array_of_starts, &
+                            & MPI_ORDER_FORTRAN, &
+                            & MPI_DOUBLE_PRECISION, MPI_gather_type, &
+                            & ierr)
+! another deception like the previous one
+CALL MPI_TYPE_SIZE(MPI_DOUBLE_PRECISION, dblsz, ierr)
+lb = 0
+ext = dblsz*( KronDelta(id, 1) + KronDelta(id, 2)*SIZE(PSI, 1) + KronDelta(id, 3)*SIZE(PSI, 1)*SIZE(PSI, 2) )
+CALL MPI_TYPE_CREATE_RESIZED(MPI_gather_type, lb, ext, MPI_gather_type_res, ierr)
+CALL MPI_TYPE_COMMIT(MPI_gather_type_res, ierr)
+
+! Debug-purpose initialization
+PSI0C = NaN
+PSIC = NaN
+
+
+!!!!!!!!!! DATA gathering !!!!!!!!!!
+CALL MPI_gather(PSI, 1, MPI_2slab_type, PSI0C, 2, MPI_gather_type_res, 0, pencil_comm(id), ierr)
+
+
+! just to simplify notation
+Cp => SPK(id, ider, istag)%C%matrix(2:SIZE(SPK(id, ider, istag)%C%matrix, 1)-1, :)  ! NOTE : no need for NaN rows
+
+! depending on direction the DO cycle must be different
+SELECT CASE(id)
+
+  CASE(1) !!!!!!!!!!!!!!!!!!!! x direction !!!!!!!!!!!!!!!!!!!!
+
+    master_only: IF (mycoords(id)==0) THEN
+      !!!!!!!!!! 5-diag system resolution !!!!!!!!!!
+      DO j = 1, SIZE(PSI0C, 2)
+        DO k = 1, SIZE(PSI0C, 3)
+          ! must exclude first and last equations and unknowns to avoid generating more NaNs
+          CALL pentdag(Cp(:, 1), Cp(:, 2), Cp(:, 3), Cp(:, 4), Cp(:, 5), &
+                       PSI0C(2:SIZE(PSI0C, id)-1, j, k), PSIC(2:SIZE(PSIC, id)-1, j, k), SIZE(PSIC, id)-2)
+        END DO
+      END DO
+
+      !!!!!!!!!! Reordering the reduced system's solution vector !!!!!!!!!!
+      ! Simple swap algorithm
+      ALLOCATE(dum(SIZE(PSIC, 2), SIZE(PSIC, 3)))
+      DO i = 2, SIZE(PSIC, id)-2, 2
+        dum = PSIC(i, :, :)
+        PSIC(i, :, :) = PSIC(i+1, :, :)
+        PSIC(i+1, :, :) = dum
+      END DO
+
+    END IF master_only
+
+    !!!!!!!!!!! Master process distributes required data !!!!!!!!!!
+    CALL MPI_SCATTER(PSIC, 2, MPI_gather_type_res, &    ! sender side
+    PSIC, 2, MPI_gather_type_res, &    ! receiver side
+    0, pencil_comm(id), ierr)
+
+    !!!!!!!!!! Update solution !!!!!!!!!!
+    IF (mycoords(id)==0) THEN
+      ! add only right value
+      DO j = 1, SIZE(PSI, 2)
+        DO k = 1, SIZE(PSI, 3)
+          PSI(:, j, k) = PSI(:, j, k) - SPK(id, ider, istag)%a1end(:, 2)*PSIC(2, j, k)
+        END DO
+      END DO
+
+    ELSE IF (mycoords(id)==dims(id)-1) THEN
+      ! add only left value
+      DO j = 1, SIZE(PSI, 2)
+        DO k = 1, SIZE(PSI, 3)
+          PSI(:, j, k) = PSI(:, j, k) - SPK(id, ider, istag)%a1end(:, 1)*PSIC(1, j, k)
+        END DO
+      END DO
+
+    ELSE
+      ! add both left and right values
+      DO j = 1, SIZE(PSI, 2)
+        DO k = 1, SIZE(PSI, 3)
+          PSI(:, j, k) = PSI(:, j, k) - SPK(id, ider, istag)%a1end(:, 1)*PSIC(1, j, k) &
+                                      - SPK(id, ider, istag)%a1end(:, 2)*PSIC(2, j, k)
+        END DO
+      END DO
+    END IF
+
+
+  CASE(2) !!!!!!!!!!!!!!!!!!!! y direction !!!!!!!!!!!!!!!!!!!!
+
+    master_only2: IF (mycoords(id)==0) THEN
+
+      !!!!!!!!!! 5-diag system resolution !!!!!!!!!!
+      DO j = 1, SIZE(PSI0C, 1)
+        DO k = 1, SIZE(PSI0C, 3)
+          ! must exclude first and last equations and unknowns to avoid generating more NaNs
+          CALL pentdag(Cp(:, 1), Cp(:, 2), Cp(:, 3), Cp(:, 4), Cp(:, 5), &
+                       PSI0C(j, 2:SIZE(PSI0C, id)-1, k), PSIC(j, 2:SIZE(PSIC, id)-1, k), SIZE(PSIC, id)-2)
+        END DO
+      END DO
+
+      !!!!!!!!!! Reordering the reduced system's solution vector !!!!!!!!!!
+      ! Simple swap algorithm
+      ALLOCATE(dum(SIZE(PSIC, 1), SIZE(PSIC, 3)))
+      DO i = 2, SIZE(PSIC, id)-2, 2
+        dum = PSIC(:, i, :)
+        PSIC(:, i, :) = PSIC(:, i+1, :)
+        PSIC(:, i+1, :) = dum
+      END DO
+
+    END IF master_only2
+
+    !!!!!!!!!!! Master process distributes required data !!!!!!!!!!
+    CALL MPI_SCATTER(PSIC, 2, MPI_gather_type_res, &    ! sender side
+                     PSIC, 2, MPI_gather_type_res, &    ! receiver side
+                     0, pencil_comm(id), ierr)
+
+    !!!!!!!!!! Update solution !!!!!!!!!!
+    IF (mycoords(id)==0) THEN
+      ! add only right value
+      DO j = 1, SIZE(PSI, 1)
+        DO k = 1, SIZE(PSI, 3)
+          PSI(j, :, k) = PSI(j, :, k) - SPK(id, ider, istag)%a1end(:, 2)*PSIC(j, 2, k)
+        END DO
+      END DO
+
+    ELSE IF (mycoords(id)==dims(id)-1) THEN
+      ! add only left value
+      DO j = 1, SIZE(PSI, 1)
+        DO k = 1, SIZE(PSI, 3)
+          PSI(j, :, k) = PSI(j, :, k) - SPK(id, ider, istag)%a1end(:, 1)*PSIC(j, 1, k)
+        END DO
+      END DO
+
+    ELSE
+      ! add both left and right values
+      DO j = 1, SIZE(PSI, 1)
+        DO k = 1, SIZE(PSI, 3)
+          PSI(j, :, k) = PSI(j, :, k) - SPK(id, ider, istag)%a1end(:, 1)*PSIC(j, 1, k) &
+                                      - SPK(id, ider, istag)%a1end(:, 2)*PSIC(j, 2, k)
+        END DO
+      END DO
+    END IF
+
+
+  CASE(3) !!!!!!!!!!!!!!!!!!!! z direction !!!!!!!!!!!!!!!!!!!!
+
+    master_only3: IF (mycoords(id)==0) THEN
+
+      !!!!!!!!!! 5-diag system resolution !!!!!!!!!!
+      DO j = 1, SIZE(PSI0C, 1)
+        DO k = 1, SIZE(PSI0C, 2)
+          ! must exclude first and last equations and unknowns to avoid generating more NaNs
+          CALL pentdag(Cp(:, 1), Cp(:, 2), Cp(:, 3), Cp(:, 4), Cp(:, 5), &
+                       PSI0C(j, k, 2:SIZE(PSI0C, id)-1), PSIC(j, k, 2:SIZE(PSIC, id)-1), SIZE(PSIC, id)-2)
+        END DO
+      END DO
+
+      !!!!!!!!!! Reordering the reduced system's solution vector !!!!!!!!!!
+      ! Simple swap algorithm
+      ALLOCATE(dum(SIZE(PSIC, 1), SIZE(PSIC, 2)))
+      DO i = 2, SIZE(PSIC, id)-2, 2
+        dum = PSIC(:, :, i)
+        PSIC(:, :, i) = PSIC(:, :, i+1)
+        PSIC(:, :, i+1) = dum
+      END DO
+
+    END IF master_only3
+
+    !!!!!!!!!!! Master process distributes required data !!!!!!!!!!
+    CALL MPI_SCATTER(PSIC, 2, MPI_gather_type_res, &    ! sender side
+                     PSIC, 2, MPI_gather_type_res, &    ! receiver side
+                     0, pencil_comm(id), ierr)
+
+    !!!!!!!!!! Update solution !!!!!!!!!!
+    IF (mycoords(id)==0) THEN
+      ! add only right value
+      DO j = 1, SIZE(PSI, 1)
+        DO k = 1, SIZE(PSI, 2)
+          PSI(j, k, :) = PSI(j, k, :) - SPK(id, ider, istag)%a1end(:, 2)*PSIC(j, k, 2)
+        END DO
+      END DO
+
+    ELSE IF (mycoords(id)==dims(id)-1) THEN
+      ! add only left value
+      DO j = 1, SIZE(PSI, 1)
+        DO k = 1, SIZE(PSI, 2)
+          PSI(j, k, :) = PSI(j, k, :) - SPK(id, ider, istag)%a1end(:, 1)*PSIC(j, k, 1)
+        END DO
+      END DO
+
+    ELSE
+      ! add both left and right values
+      DO j = 1, SIZE(PSI, 1)
+        DO k = 1, SIZE(PSI, 2)
+          PSI(j, k, :) = PSI(j, k, :) - SPK(id, ider, istag)%a1end(:, 1)*PSIC(j, k, 1) &
+                                      - SPK(id, ider, istag)%a1end(:, 2)*PSIC(j, k, 2)
+        END DO
+      END DO
+    END IF
+
+END SELECT
+
+!IF (myid==0) CALL printmatrix(PSI)
+
+CALL MPI_TYPE_FREE(MPI_1slab_type, ierr)
+CALL MPI_TYPE_FREE(MPI_1slab_res, ierr)
+CALL MPI_TYPE_FREE(MPI_2slab_type, ierr)
+CALL MPI_TYPE_FREE(MPI_gather_type, ierr)
+CALL MPI_TYPE_FREE(MPI_gather_type_res, ierr)
+
+
+END SUBROUTINE SPIKE_solve2
+
+
+
+
+
+
+
 
 
 
