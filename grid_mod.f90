@@ -8,7 +8,7 @@ MODULE grids
 !    SUBROUTINE deallocate_grids
 
     IMPLICIT NONE
-    
+
     REAL,    DIMENSION(:), ALLOCATABLE :: L        ! Length of the domain along the ndims directions
     INTEGER, DIMENSION(:), ALLOCATABLE :: spacings ! integers identifying the spacing along the ndims directions (uniform, Chebyshev, ...)
 
@@ -17,7 +17,7 @@ MODULE grids
     ! two_grids(2)%g would be the same as MATLAB's two_grids{2}.
         REAL, DIMENSION(:), ALLOCATABLE :: g
     END TYPE grid1D
-    
+
     TYPE grid3D
     ! A variable of this type is going to contain the ndims meshes along the
     ! ndims spatial directions.
@@ -25,7 +25,7 @@ MODULE grids
         TYPE(grid1D), DIMENSION(:), ALLOCATABLE :: f
         TYPE(grid1D), DIMENSION(:), ALLOCATABLE :: c
     END TYPE grid3D
-    
+
     TYPE(grid3D) :: m3Dfc_tot ! stands for 3 meshes (or 1 or 2, depending on
                               ! ndims), for faces and centers of cells.
     ! At this point, m3Dfc_tot%f(2)%g would access to the y-coordinates of the
@@ -44,7 +44,7 @@ CONTAINS
 
         USE essentials
         USE MPI_module, ONLY : myid, Ntot, ndims
-        
+
         IMPLICIT NONE
 
         INTEGER         :: i ! generic index
@@ -66,18 +66,18 @@ CONTAINS
                 ALLOCATE(m3Dfc_tot%f(i)%g(Ntot(i)+1))
                 ALLOCATE(m3Dfc_tot%c(i)%g(Ntot(i)))
                 m3Dfc_tot%f(i)%g = linspace(0.0,1.0,Ntot(i)+1)
-    
+
                 mesh_spacing: SELECT CASE (spacings(i))
-                              
+
                     CASE (1) ! uniform (from 0 to L%matrix,schemes)
                         m3Dfc_tot%f(i)%g = m3Dfc_tot%f(i)%g*L(i)
-    
+
                     CASE (2) ! Chebyshev (from 0 to L)
                         m3Dfc_tot%f(i)%g = (1 + COS(pi*(1-m3Dfc_tot%f(i)%g)))*L(i)/2
-    
+
                     CASE DEFAULT
                         PRINT *, 'ERROR in grid_mod.f90: no such spacing is coded'
-    
+
                 END SELECT mesh_spacing
 
                 ! The grid of the centers has to be built from the grid of the faces.
@@ -139,7 +139,7 @@ CONTAINS
         IF (myid == 0) THEN
             DEALLOCATE(m3Dfc_tot%f)
             DEALLOCATE(m3Dfc_tot%c)
-            DEALLOCATE(L)
+            !DEALLOCATE(L)    ! NOTE: mi serviva
             DEALLOCATE(spacings)
             DEALLOCATE(all_grids)
         END IF

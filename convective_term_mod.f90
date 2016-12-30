@@ -151,6 +151,7 @@ CONTAINS
           END DO
           array_of_starts = [0, 0, 0]
 
+
           ! Creating slab types
           CALL MPI_TYPE_CREATE_SUBARRAY(ndims, &
                                       & array_of_sizes, array_of_subsizes_m, array_of_starts, &
@@ -172,9 +173,9 @@ CONTAINS
           array_of_sizes = SHAPE(velvel(2, ic)%values)
           DO id2 = 1, ndims
             array_of_subsizes_m(id2) = KronDelta(id, id2)*(velvel(2, ic)%b(id2, 1)-velvel(2, ic)%b_ol(id2, 1)) &
-                                       + (1-KronDelta(id, id2))*(velvel(2, ic)%b_bo(id2, 2)-velvel(2, ic)%b_bo(id2, 1)+1)
+                                       + (1-KronDelta(id, id2))*(velvel(2, ic)%b(id2, 2)-velvel(2, ic)%b(id2, 1)+1)
             array_of_subsizes_p(id2) = KronDelta(id, id2)*(velvel(2, ic)%b_ol(id2, 2)-velvel(2, ic)%b(id2, 2)) &
-                                       + (1-KronDelta(id, id2))*(velvel(2, ic)%b_bo(id2, 2)-velvel(2, ic)%b_bo(id2, 1)+1)
+                                       + (1-KronDelta(id, id2))*(velvel(2, ic)%b(id2, 2)-velvel(2, ic)%b(id2, 1)+1)
           END DO
           array_of_starts = [0, 0, 0]
 
@@ -193,17 +194,16 @@ CONTAINS
           CALL MPI_TYPE_COMMIT(MPI_slab_m(ic,id), ierr)
           CALL MPI_TYPE_COMMIT(MPI_slab_p(ic,id), ierr)
 
-          ! FIXME: modifica questi slab; dovrebbe essere sufficiente sostituire intvel(id) con velvel(2, id), andando così
-          ! a selezionare lo stesso blocco delle slab precedenti (uv, vw e wu)
+
           id = ic - 1
           IF (id<1) id = ndims
           ! Slab type prerequisites
           array_of_sizes = SHAPE(velvel(2, id)%values)
           DO id2 = 1, ndims
             array_of_subsizes_m(id2) = KronDelta(id, id2)*(velvel(2, id)%b(id2, 1)-velvel(2, id)%b_ol(id2, 1)) &
-                                       + (1-KronDelta(id, id2))*(velvel(2, id)%b_bo(id2, 2)-velvel(2, id)%b_bo(id2, 1)+1)
+                                       + (1-KronDelta(id, id2))*(velvel(2, id)%b(id2, 2)-velvel(2, id)%b(id2, 1)+1)
             array_of_subsizes_p(id2) = KronDelta(id, id2)*(velvel(2, id)%b_ol(id2, 2)-velvel(2, id)%b(id2, 2)) &
-                                       + (1-KronDelta(id, id2))*(velvel(2, id)%b_bo(id2, 2)-velvel(2, id)%b_bo(id2, 1)+1)
+                                       + (1-KronDelta(id, id2))*(velvel(2, id)%b(id2, 2)-velvel(2, id)%b(id2, 1)+1)
           END DO
           array_of_starts = [0, 0, 0]
 
@@ -677,24 +677,24 @@ CONTAINS
     id = 2
     ! y forward communication
     CALL MPI_SENDRECV(velvel(2, ic)%values( &
-                      velvel(2, ic)%b_bo(1, 1), &
-                      velvel(2, ic)%b(id, 2) + velvel(2, ic)%b_ol(id, 1)-velvel(2, ic)%b(id, 1), &
+                      velvel(2, ic)%b(1, 1), &
+                      velvel(2, ic)%b(id, 2) + velvel(2, ic)%b_ol(id, 1)-velvel(2, ic)%b(id, 1)+1, &
                       velvel(2, ic)%b(3, 1)), &
                       1, MPI_slab_m(ic, id), idp(id), 188, &
                       velvel(2, ic)%values( &
-                      velvel(2, ic)%b_bo(1, 1), &
+                      velvel(2, ic)%b(1, 1), &
                       velvel(2, ic)%b_bo(id, 1), &
                       velvel(2, ic)%b(3, 1)), &
                       1, MPI_slab_m(ic, id), idm(id), 188, &
                       procs_grid, status, ierr)
     ! y backward communication
     CALL MPI_SENDRECV(velvel(2, ic)%values( &
-                      velvel(2, ic)%b_bo(1, 1), &
+                      velvel(2, ic)%b(1, 1), &
                       velvel(2, ic)%b(id, 1), &
                       velvel(2, ic)%b(3, 1)), &
                       1, MPI_slab_p(ic, id), idm(id), 189, &
                       velvel(2, ic)%values( &
-                      velvel(2, ic)%b_bo(1, 1), &
+                      velvel(2, ic)%b(1, 1), &
                       velvel(2, ic)%b(id, 2)+1, &
                       velvel(2, ic)%b(3, 1)), &
                       1, MPI_slab_p(ic, id), idp(id), 189, &
@@ -704,24 +704,24 @@ CONTAINS
     id = 3
     ! z forward communication
     CALL MPI_SENDRECV(velvel(2, id)%values( &
-                      velvel(2, id)%b_bo(1, 1), &
+                      velvel(2, id)%b(1, 1), &
                       velvel(2, id)%b(2, 1), &
-                      velvel(2, id)%b(id, 2) + velvel(2, id)%b_ol(id, 1)-velvel(2, id)%b(id, 1)), &
+                      velvel(2, id)%b(id, 2) + velvel(2, id)%b_ol(id, 1)-velvel(2, id)%b(id, 1)+1), &
                       1, MPI_slab_m(ic, id), idp(id), 190, &
                       velvel(2, id)%values( &
-                      velvel(2, id)%b_bo(1, 1), &
+                      velvel(2, id)%b(1, 1), &
                       velvel(2, id)%b(2, 1), &
                       velvel(2, id)%b_bo(id, 1)), &
                       1, MPI_slab_m(ic, id), idm(id), 190, &
                       procs_grid, status, ierr)
     ! z backward communication
     CALL MPI_SENDRECV(velvel(2, id)%values( &
-                      velvel(2, id)%b_bo(1, 1), &
+                      velvel(2, id)%b(1, 1), &
                       velvel(2, id)%b(2, 1), &
                       velvel(2, id)%b(id, 1)), &
                       1, MPI_slab_p(ic, id), idm(id), 191, &
                       velvel(2, id)%values( &
-                      velvel(2, id)%b_bo(1, 1), &
+                      velvel(2, id)%b(1, 1), &
                       velvel(2, id)%b(2, 1), &
                       velvel(2, id)%b(id, 2)+1), &
                       1, MPI_slab_p(ic, id), idp(id), 191, &
@@ -734,24 +734,24 @@ CONTAINS
     ! z forward communication
     CALL MPI_SENDRECV(velvel(2, ic)%values( &
                       velvel(2, ic)%b(1, 1), &
-                      velvel(2, ic)%b_bo(2, 1), &
-                      velvel(2, ic)%b(id, 2) + velvel(2, ic)%b_ol(id, 1)-velvel(2, ic)%b(id, 1)), &
+                      velvel(2, ic)%b(2, 1), &
+                      velvel(2, ic)%b(id, 2) + velvel(2, ic)%b_ol(id, 1)-velvel(2, ic)%b(id, 1)+1), &
                       1, MPI_slab_m(ic, id), idp(id), 192, &
                       velvel(2, ic)%values( &
                       velvel(2, ic)%b(1, 1), &
-                      velvel(2, ic)%b_bo(2, 1), &
+                      velvel(2, ic)%b(2, 1), &
                       velvel(2, ic)%b_bo(id, 1)), &
                       1, MPI_slab_m(ic, id), idm(id), 192, &
                       procs_grid, status, ierr)
     ! z backward communication
     CALL MPI_SENDRECV(velvel(2, ic)%values( &
                       velvel(2, ic)%b(1, 1), &
-                      velvel(2, ic)%b_bo(2, 1), &
+                      velvel(2, ic)%b(2, 1), &
                       velvel(2, ic)%b(id, 1)), &
                       1, MPI_slab_p(ic, id), idm(id), 193, &
                       velvel(2, ic)%values( &
                       velvel(2, ic)%b(1, 1), &
-                      velvel(2, ic)%b_bo(2, 1), &
+                      velvel(2, ic)%b(2, 1), &
                       velvel(2, ic)%b(id, 2)+1), &
                       1, MPI_slab_p(ic, id), idp(id), 193, &
                       procs_grid, status, ierr)
@@ -760,25 +760,25 @@ CONTAINS
     id = 1
     ! x forward communication
     CALL MPI_SENDRECV(velvel(2, id)%values( &
-                      velvel(2, id)%b(id, 2) + velvel(2, id)%b_ol(id, 1)-velvel(2, id)%b(id, 1), &
-                      velvel(2, id)%b_bo(2, 1), &
+                      velvel(2, id)%b(id, 2) + velvel(2, id)%b_ol(id, 1)-velvel(2, id)%b(id, 1)+1, &
+                      velvel(2, id)%b(2, 1), &
                       velvel(2, id)%b(3, 1)), &
                       1, MPI_slab_m(ic, id), idp(id), 194, &
                       velvel(2, id)%values( &
                       velvel(2, id)%b_bo(id, 1), &
-                      velvel(2, id)%b_bo(2, 1), &
+                      velvel(2, id)%b(2, 1), &
                       velvel(2, id)%b(3, 1)), &
                       1, MPI_slab_m(ic, id), idm(id), 194, &
                       procs_grid, status, ierr)
     ! x backward communication
     CALL MPI_SENDRECV(velvel(2, id)%values( &
                       velvel(2, id)%b(id, 1), &
-                      velvel(2, id)%b_bo(2, 1), &
+                      velvel(2, id)%b(2, 1), &
                       velvel(2, id)%b(3, 1)), &
                       1, MPI_slab_p(ic, id), idm(id), 195, &
                       velvel(2, id)%values( &
                       velvel(2, id)%b(id, 2)+1, &
-                      velvel(2, id)%b_bo(2, 1), &
+                      velvel(2, id)%b(2, 1), &
                       velvel(2, id)%b(3, 1)), &
                       1, MPI_slab_p(ic, id), idp(id), 195, &
                       procs_grid, status, ierr)
@@ -789,26 +789,26 @@ CONTAINS
     id = 1
     ! x forward communication
     CALL MPI_SENDRECV(velvel(2, ic)%values( &
-                      velvel(2, ic)%b(id, 2) + velvel(2, ic)%b_ol(id, 1)-velvel(2, ic)%b(id, 1), &
+                      velvel(2, ic)%b(id, 2) + velvel(2, ic)%b_ol(id, 1)-velvel(2, ic)%b(id, 1)+1, &
                       velvel(2, ic)%b(2, 1), &
-                      velvel(2, ic)%b_bo(3, 1)), &
+                      velvel(2, ic)%b(3, 1)), &
                       1, MPI_slab_m(ic, id), idp(id), 196, &
                       velvel(2, ic)%values( &
                       velvel(2, ic)%b_bo(id, 1), &
                       velvel(2, ic)%b(2, 1), &
-                      velvel(2, ic)%b_bo(3, 1)), &
+                      velvel(2, ic)%b(3, 1)), &
                       1, MPI_slab_m(ic, id), idm(id), 196, &
                       procs_grid, status, ierr)
     ! x backward communication
     CALL MPI_SENDRECV(velvel(2, ic)%values( &
                       velvel(2, ic)%b(id, 1), &
                       velvel(2, ic)%b(2, 1), &
-                      velvel(2, ic)%b_bo(3, 1)), &
+                      velvel(2, ic)%b(3, 1)), &
                       1, MPI_slab_p(ic, id), idm(id), 197, &
                       velvel(2, ic)%values( &
                       velvel(2, ic)%b(id, 2)+1, &
                       velvel(2, ic)%b(2, 1), &
-                      velvel(2, ic)%b_bo(3, 1)), &
+                      velvel(2, ic)%b(3, 1)), &
                       1, MPI_slab_p(ic, id), idp(id), 197, &
                       procs_grid, status, ierr)
 
@@ -817,25 +817,25 @@ CONTAINS
     ! y forward communication
     CALL MPI_SENDRECV(velvel(2, id)%values( &
                       velvel(2, id)%b(1, 1), &
-                      velvel(2, id)%b(id, 2) + velvel(2, id)%b_ol(id, 1)-velvel(2, id)%b(id, 1), &
-                      velvel(2, id)%b_bo(3, 1)), &
+                      velvel(2, id)%b(id, 2) + velvel(2, id)%b_ol(id, 1)-velvel(2, id)%b(id, 1)+1, &
+                      velvel(2, id)%b(3, 1)), &
                       1, MPI_slab_m(ic, id), idp(id), 198, &
                       velvel(2, id)%values( &
                       velvel(2, id)%b(1, 1), &
                       velvel(2, id)%b_bo(id, 1), &
-                      velvel(2, id)%b_bo(3, 1)), &
+                      velvel(2, id)%b(3, 1)), &
                       1, MPI_slab_m(ic, id), idm(id), 198, &
                       procs_grid, status, ierr)
     ! y backward communication
     CALL MPI_SENDRECV(velvel(2, id)%values( &
                       velvel(2, id)%b(1, 1), &
                       velvel(2, id)%b(id, 1), &
-                      velvel(2, id)%b_bo(3, 1)), &
+                      velvel(2, id)%b(3, 1)), &
                       1, MPI_slab_p(ic, id), idm(id), 199, &
                       velvel(2, id)%values( &
                       velvel(2, id)%b(1, 1), &
                       velvel(2, id)%b(id, 2)+1, &
-                      velvel(2, id)%b_bo(3, 1)), &
+                      velvel(2, id)%b(3, 1)), &
                       1, MPI_slab_p(ic, id), idp(id), 199, &
                       procs_grid, status, ierr)
 
@@ -877,7 +877,6 @@ CONTAINS
     !!!!!!!!!! Velocity*velocity communications !!!!!!!!!!
     CALL conv_exchange
 
-    !IF (myid==iii) CALL printmatrix(velvel(2, 1)%values)
 
     !!!!!!!!!! Debugging inizialization !!!!!!!!!!
     DO ic = 1, ndims
