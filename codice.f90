@@ -1,23 +1,42 @@
 PROGRAM codice
 
 USE MPI
-USE essentials 
+USE essentials
 USE MPI_module
 USE input
 USE grids
 USE variables
 USE compact
-USE ic_and_bc 
-USE set_pressure 
-USE solve_pressure 
+USE ic_and_bc
+USE set_pressure
+USE solve_pressure
 USE SPIKE
+USE diffusive_term
+USE convective_term
+USE bandedmatrix
+USE time_advancement
+USE output
+USE, INTRINSIC :: IEEE_ARITHMETIC ! to use IEEE routines
+
 
 IMPLICIT NONE
 
-INTEGER :: ierr, i, ic
+INTEGER :: ierr, ic, id, istag
 INTEGER, PARAMETER :: out_unit = 1
 INTEGER :: MPI_v, MPI_sub_v, MPI_v_len
 CHARACTER(len=140) :: MPI_v_str
+REAL, DIMENSION(3, 3, 3) :: A
+INTEGER :: i, j, k, iii
+REAL, DIMENSION(:), ALLOCATABLE :: q, psi
+REAL, DIMENSION(:), ALLOCATABLE :: coeffs
+INTEGER, POINTER :: lid, uid
+REAL :: dt, ni
+INTEGER :: sz, prova, nun
+INTEGER(MPI_ADDRESS_KIND) :: i1, i2, diff
+INTEGER :: ext1, ext2
+REAL               :: r = 0.0, NaN ! r is a dummy real used to define a NaN of type real
+NaN = IEEE_VALUE(r, IEEE_QUIET_NAN) ! NaN of the same type as r
+
 
 CALL MPI_INIT(ierr)
 
@@ -61,14 +80,14 @@ CALL SPIKE_init
 
 
 ! le seguenti assegnazioni devono provenire da una lettura da file
-tol=1e-8
+tol=1e-6
 It_type='SRJ'
 ! It_type='J'
 IF(myid==0)THEN
 
-    ALLOCATE(pres_schemes(ndims,1:2))  
+    ALLOCATE(pres_schemes(ndims,1:2))
 
-    Do i=1,ndims     
+    Do i=1,ndims
 
         ALLOCATE(pres_schemes(i,1)%sch(-1:1), pres_schemes(i,2)%sch(-1:1))
         pres_schemes(i,1)%sch(-1)='zero'
@@ -122,12 +141,13 @@ ALLOCATE(b(indv(1,1):indv(1,2),indv(2,1):indv(2,2),indv(3,1):indv(3,2)))
 ! Questo termine deve essere in realtà la divergenza del campo *
 b = .0
 IF (myid == 13) THEN
-    b(1,2,1) = 1.0
-    b(1,3,1) = -1.0
+    nun = FLOOR(REAL(SIZE(b, 1))/2)
+    b(nun,nun,nun) = 1.0
+    !b(1,3,1) = -1.0
 END IF
 
 ! uvwp(4)%values=100.0
-p = 123.0
+p = 0
 ! CALL RANDOM_NUMBER(p)
 ! p = myid
 
@@ -149,7 +169,7 @@ DO i = 0, nprocs-1
         END IF
         WRITE(out_unit,*) myid, N(1), N(2), N(3)
         CLOSE(out_unit)
-    END IF 
+    END IF
     CALL MPI_BARRIER(procs_grid, ierr)
 END DO
 
@@ -163,42 +183,119 @@ DO i = 0, nprocs-1
         WRITE(out_unit,*) p
         ! WRITE(out_unit,*) uvwp(4)%values
         CLOSE(out_unit)
-    END IF 
+    END IF
     CALL MPI_BARRIER(procs_grid, ierr)
 END DO
 
+CALL set_diff_bounds
+CALL set_conv_bounds
+CALL set_conv_bc
+CALL set_grad_p
+
+
+!!!!!! PROVE !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!DO i = 1, 3
+!
+!IF (mycoords(3)==0) THEN
+!  DO j = uvwp(i)%b_bc(3, 1), uvwp(i)%b(3, 2)
+!      uvwp(i)%values(uvwp(i)%b_bc(1, 1):uvwp(i)%b_bc(1, 2), &
+!                     uvwp(i)%b_bc(2, 1):uvwp(i)%b_bc(2, 2), &
+!                     j) = j + 0.5*logical2integer(j==0)
+!  END DO
+!END IF
+!CALL SPIKE_exchange_uvw
+!IF (mycoords(3)==1) THEN
+!  DO j = uvwp(i)%b(3, 1), uvwp(i)%b(3, 2)
+!      uvwp(i)%values(uvwp(i)%b_bc(1, 1):uvwp(i)%b_bc(1, 2), &
+!                     uvwp(i)%b_bc(2, 1):uvwp(i)%b_bc(2, 2), &
+!                     j) = j + uvwp(i)%values(uvwp(i)%b(1, 1), &
+!                                             uvwp(i)%b(2, 1), &
+!                                             uvwp(i)%b(3, 1)-1)
+!  END DO
+!END IFi = 1, 10
+  IF (myid==iii) PRINT *, i
+  CALL Exp
+!CALL SPIKE_exchange_uvw
+!IF (mycoords(3)==2) THEN
+!  DO j = uvwp(i)%b(3, 1), uvwp(i)%b_bc(3, 2)
+!      uvwp(i)%values(uvwp(i)%b_bc(1, 1):uvwp(i)%b_bc(1, 2), &
+!                     uvwp(i)%b_bc(2, 1):uvwp(i)%b_bc(2, 2), &
+!                     j) = j + uvwp(i)%values(uvwp(i)%b(1, 1), &
+!                                             uvwp(i)%b(2, 1), &
+!                                             uvwp(i)%b(3, 1)-1) + &
+!                          (-0.5)*logical2integer(j==4)*logical2integer(i/=3)
+!  END DO
+!END IF
+!CALL SPIKE_exchange_uvw
+!
+!!uvwp(i)%values = 2
+!!uvwp(i)%values = uvwp(i)%values**2
+!
+!END DO
 
 
 
-CALL SPIKE_exchange_uvw
+!CALL diff_calc
+!CALL conv_interp
+!CALL conv_exchange
+!CALL conv_calc
+!CALL divergence_calc
+!CALL solve_p
+!CALL p_exchange
 
-ic = 2
-DO i = 0,nprocs-1
-    CALL MPI_BARRIER(procs_grid, ierr)
-    if (myid == i) then
-        CALL printmatrix(uvwp(ic)%values)
-        print *, 'cells = ', N
-        print *, 'b     = ', uvwp(ic)%b(1,:),    uvwp(ic)%b(2,:),    uvwp(ic)%b(3,:)
-        print *, 'b_bc  = ', uvwp(ic)%b_bc(1,:), uvwp(ic)%b_bc(2,:), uvwp(ic)%b_bc(3,:)
-        print *, 'b_ol  = ', uvwp(ic)%b_ol(1,:), uvwp(ic)%b_ol(2,:), uvwp(ic)%b_ol(3,:)
-        print *, 'b_bo  = ', uvwp(ic)%b_bo(1,:), uvwp(ic)%b_bo(2,:), uvwp(ic)%b_bo(3,:)
-        print *, 'shape = ', SHAPE(uvwp(ic)%values)
-    endif
+
+dt = 1e-2
+ni = 1e-2
+
+iii = 13
+
+DO i = 1, 10
+  IF (myid==iii) PRINT *, i
+  CALL ExplEuler(dt, ni)
 END DO
+!CALL SPIKE_exchange_uvw
+!CALL divergence_calc
 
+i = 3
+!IF (myid==iii) PRINT *, [(j, j = 1, uvwp(i)%b(1, 2)-uvwp(i)%b(1, 1)+1)]
+!IF (myid==iii) CALL printmatrix(uvwp(i)%values)
+!IF (myid==iii) CALL printmatrix(diffvel(i)%values)
+!IF (myid==iii) CALL printmatrix(velvel(1, i)%values)
+!IF (myid==iii) CALL printmatrix(velvel(2, i)%values)
+!IF (myid==iii) CALL printmatrix(intvel(1)%values)
+!IF (myid==iii) PRINT *, velvel(2, i)%b
+!IF (myid==iii) PRINT *, velvel(2, i)%b_ol
+!IF (myid==iii) CALL printmatrix(convvel(i)%values)
+IF (myid==iii) CALL printmatrix(b)
+!IF (myid==iii) CALL printmatrix(gradp(i)%values)
+!IF (myid==iii) CALL printmatrix(p)
+!IF (myid==iii) CALL printmatrix(uvwp(4)%values)
+
+!IF (myid==13) CALL printmatrix(GraDiv(1, 2)%matrix)
+!IF (myid==iii) CALL printmatrix(Lapl(i)%matrix)
+!IF (myid==iii) CALL printmatrix(weigC_grid)
+
+
+
+
+
+!CALL set_output
+!CALL raw_out
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 
 ! print MPI library version
-CALL MPI_BARRIER(procs_grid, ierr)
-IF (myid == 0) THEN
-    PRINT *, ''
-    PRINT *, ''
-    PRINT *, ''
-    CALL MPI_GET_LIBRARY_VERSION(MPI_v_str, MPI_v_len, ierr)
-    PRINT *, 'MPI_GET_LIBRARY_VERSION: ', MPI_v_str
-    CALL MPI_GET_VERSION(MPI_v, MPI_sub_v, ierr)
-    PRINT *, 'MPI_GET_VERSION: ', MPI_v, '.',  MPI_sub_v
-END IF
+!CALL MPI_BARRIER(procs_grid, ierr)
+!IF (myid == 0) THEN
+!    PRINT *, ''
+!    PRINT *, ''
+!    PRINT *, ''
+!    CALL MPI_GET_LIBRARY_VERSION(MPI_v_str, MPI_v_len, ierr)
+!    PRINT *, 'MPI_GET_LIBRARY_VERSION: ', MPI_v_str
+!    CALL MPI_GET_VERSION(MPI_v, MPI_sub_v, ierr)
+!    PRINT *, 'MPI_GET_VERSION: ', MPI_v, '.',  MPI_sub_v
+!END IF
 
 CALL MPI_FINALIZE(ierr)
 
