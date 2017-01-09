@@ -5,7 +5,7 @@
 # The compiler
 FC = mpifort
 # Flags for debugging or for maximum performance
-FCFLAGS = -g -O0 -Waliasing -Wampersand -Wcharacter-truncation -Wsurprising -fimplicit-none -fcheck=all -fbacktrace -fdefault-real-8
+FCFLAGS = -g -O0 -Waliasing -Wampersand -Wcharacter-truncation -Wsurprising -fimplicit-none -fbacktrace -fdefault-real-8
 FLIBS   = -llapack -lblas
 
 # List of executables to be built within the package
@@ -27,19 +27,21 @@ all: $(PROGRAMS)
 # dependencies of the relevant object files that require them and will
 # be built by a chain rule.
 
-codice:      codice.o  MPI_module_mod.o grid_mod.o essential_mod.o compact_mod.o bandedmatrix_mod.o input_mod.o ic_and_bc_mod.o set_pressure_mod.o solve_pressure_mod.o library_mod.o thomas_mod.o SPIKE_mod.o variables_mod.o diffusive_term_mod.o convective_term_mod.o
-codice.o:              MPI_module_mod.o grid_mod.o essential_mod.o compact_mod.o                    input_mod.o ic_and_bc_mod.o set_pressure_mod.o solve_pressure_mod.o                            SPIKE_mod.o variables_mod.o diffusive_term_mod.o convective_term_mod.o
+codice:      codice.o  MPI_module_mod.o grid_mod.o essential_mod.o compact_mod.o bandedmatrix_mod.o input_mod.o ic_and_bc_mod.o set_pressure_mod.o solve_pressure_mod.o library_mod.o thomas_mod.o SPIKE_mod.o variables_mod.o diffusive_term_mod.o convective_term_mod.o time_advancement_mod.o output_mod.o
+codice.o:              MPI_module_mod.o grid_mod.o essential_mod.o compact_mod.o                    input_mod.o ic_and_bc_mod.o set_pressure_mod.o solve_pressure_mod.o                            SPIKE_mod.o variables_mod.o diffusive_term_mod.o convective_term_mod.o time_advancement_mod.o output_mod.o
 grid_mod.o:            MPI_module_mod.o            essential_mod.o
 compact_mod.o:         MPI_module_mod.o grid_mod.o 	                        bandedmatrix_mod.o                                                                     library_mod.o
 input_mod.o:           MPI_module_mod.o grid_mod.o                 compact_mod.o                                ic_and_bc_mod.o set_pressure_mod.o
-ic_and_bc_mod.o:       MPI_module_mod.o grid_mod.o                                                                                                                                                             variables_mod.o
+ic_and_bc_mod.o:       MPI_module_mod.o grid_mod.o                                                                                                                                                             variables_mod.o convective_term_mod.o
 MPI_module_mod.o:                                  essential_mod.o
 set_pressure_mod.o:    MPI_module_mod.o grid_mod.o essential_mod.o compact_mod.o bandedmatrix_mod.o                                                                     library_mod.o                          variables_mod.o
 solve_pressure_mod.o:  MPI_module_mod.o grid_mod.o                               bandedmatrix_mod.o                             set_pressure_mod.o
 SPIKE_mod.o:           MPI_module_mod.o grid_mod.o                 compact_mod.o bandedmatrix_mod.o                                                                                   thomas_mod.o
 variables_mod.o:       MPI_module_mod.o            essential_mod.o compact_mod.o
-diffusive_term_mod.o:  MPI_module_mod.o variables_mod.o compact_mod.o bandedmatrix_mod.o essential_mod.o
-convective_term_mod.o: MPI_module_mod.o variables_mod.o compact_mod.o bandedmatrix_mod.o essential_mod.o
+diffusive_term_mod.o:  MPI_module_mod.o variables_mod.o compact_mod.o bandedmatrix_mod.o essential_mod.o SPIKE_mod.o
+convective_term_mod.o: MPI_module_mod.o variables_mod.o compact_mod.o bandedmatrix_mod.o essential_mod.o SPIKE_mod.o
+time_advancement_mod.o: variables_mod.o bandedmatrix_mod.o solve_pressure_mod.o convective_term_mod.o diffusive_term_mod.o
+output_mod.o:	MPI_module_mod.o variables_mod.o
 
 # ======================================================================
 # And now the general rules
