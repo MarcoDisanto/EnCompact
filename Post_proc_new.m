@@ -108,9 +108,9 @@ end
 % ptot(end,:,:)=ptot(end-1,:,:);
 
 %A=ptot(5,:,:);
-A(:,:)=ptot(25,:,:);
-B(:,:)=ptot(:,25,:);
-C(:,:)=ptot(:,:,25);
+A(:,:)=ptot(10,:,:);
+B(:,:)=ptot(:,10,:);
+C(:,:)=ptot(:,:,10);
 
 [G1, G2]=meshgrid(linspace(0,1,length(A(1,:))),linspace(0,1,length(A(1,:))));
 
