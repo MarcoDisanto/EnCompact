@@ -80,7 +80,7 @@ CALL SPIKE_init
 
 
 ! le seguenti assegnazioni devono provenire da una lettura da file
-tol=1e-6
+tol=1e-8
 It_type='SRJ'
 ! It_type='J'
 IF(myid==0)THEN
@@ -213,8 +213,8 @@ CALL set_grad_p
 !                                             uvwp(i)%b(3, 1)-1)
 !  END DO
 !END IFi = 1, 10
-  IF (myid==iii) PRINT *, i
-  CALL Exp
+!  IF (myid==iii) PRINT *, i
+!  CALL ExplEuler
 !CALL SPIKE_exchange_uvw
 !IF (mycoords(3)==2) THEN
 !  DO j = uvwp(i)%b(3, 1), uvwp(i)%b_bc(3, 2)
@@ -244,21 +244,21 @@ CALL set_grad_p
 !CALL p_exchange
 
 
-dt = 1e-2
-ni = 1e-2
+dt = 1e-3
+ni = 1e-1
 
 iii = 13
 
-DO i = 1, 10
+DO i = 1, 1000
   IF (myid==iii) PRINT *, i
   CALL ExplEuler(dt, ni)
 END DO
-!CALL SPIKE_exchange_uvw
-!CALL divergence_calc
+CALL SPIKE_exchange_uvw
+CALL divergence_calc
 
-i = 3
+i = 1
 !IF (myid==iii) PRINT *, [(j, j = 1, uvwp(i)%b(1, 2)-uvwp(i)%b(1, 1)+1)]
-!IF (myid==iii) CALL printmatrix(uvwp(i)%values)
+IF (myid==iii) CALL printmatrix(uvwp(i)%values)
 !IF (myid==iii) CALL printmatrix(diffvel(i)%values)
 !IF (myid==iii) CALL printmatrix(velvel(1, i)%values)
 !IF (myid==iii) CALL printmatrix(velvel(2, i)%values)
@@ -266,7 +266,7 @@ i = 3
 !IF (myid==iii) PRINT *, velvel(2, i)%b
 !IF (myid==iii) PRINT *, velvel(2, i)%b_ol
 !IF (myid==iii) CALL printmatrix(convvel(i)%values)
-IF (myid==iii) CALL printmatrix(b)
+!IF (myid==iii) CALL printmatrix(b)
 !IF (myid==iii) CALL printmatrix(gradp(i)%values)
 !IF (myid==iii) CALL printmatrix(p)
 !IF (myid==iii) CALL printmatrix(uvwp(4)%values)
@@ -279,23 +279,23 @@ IF (myid==iii) CALL printmatrix(b)
 
 
 
-!CALL set_output
-!CALL raw_out
+CALL set_output
+CALL raw_out
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 
 ! print MPI library version
-!CALL MPI_BARRIER(procs_grid, ierr)
-!IF (myid == 0) THEN
-!    PRINT *, ''
-!    PRINT *, ''
-!    PRINT *, ''
-!    CALL MPI_GET_LIBRARY_VERSION(MPI_v_str, MPI_v_len, ierr)
-!    PRINT *, 'MPI_GET_LIBRARY_VERSION: ', MPI_v_str
-!    CALL MPI_GET_VERSION(MPI_v, MPI_sub_v, ierr)
-!    PRINT *, 'MPI_GET_VERSION: ', MPI_v, '.',  MPI_sub_v
-!END IF
+CALL MPI_BARRIER(procs_grid, ierr)
+IF (myid == 0) THEN
+    PRINT *, ''
+    PRINT *, ''
+    PRINT *, ''
+    CALL MPI_GET_LIBRARY_VERSION(MPI_v_str, MPI_v_len, ierr)
+    PRINT *, 'MPI_GET_LIBRARY_VERSION: ', MPI_v_str
+    CALL MPI_GET_VERSION(MPI_v, MPI_sub_v, ierr)
+    PRINT *, 'MPI_GET_VERSION: ', MPI_v, '.',  MPI_sub_v
+END IF
 
 CALL MPI_FINALIZE(ierr)
 
