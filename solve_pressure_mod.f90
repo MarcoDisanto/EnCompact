@@ -29,6 +29,9 @@ CONTAINS
 
         IF (It_type .eq. 'SRJ') CALL Rel_vec(omega)
         
+        ! the iteration cycle must be entered at least once
+        done = .FALSE.
+        it_num = 0
         DO WHILE (done .EQV. .FALSE.)
 
             !Comunicazione delle p di faccia.
@@ -76,7 +79,7 @@ CONTAINS
         REAL :: norm_loc
         INTEGER :: ierr
         
-        it_num = it_num+1
+        it_num = it_num + 1
         
         CALL Out_diag!(res)
         
@@ -85,9 +88,9 @@ CONTAINS
         
         norm_loc = MAXVAL(ABS(res)) 
         CALL MPI_ALLREDUCE(norm_loc, norm, 1, MPI_DOUBLE_PRECISION, MPI_MAX, procs_grid, ierr)
-        IF (norm<= tol) done = .true.
+        IF (norm<= tol) done = .TRUE.
         
-        IF (myid == 0) WRITE(*,*) norm, it_num
+        !IF (myid == 0) WRITE(*,*) norm, it_num
     
     END SUBROUTINE Res_check
     
