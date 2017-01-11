@@ -3,21 +3,21 @@
 # number of dimensions (1, 2, or 3)
 ndims   3 # DO NOT MOVE (this MUST be the first readable line)
 # domain length along each dimension (ndims real numbers)
-lengths       10      10      10
+lengths        1       1       5
 # periodicity along each dimension (ndims 0s or 1s)
 periodic       0       0       0
 # boundary conditions
 #uvw_BC Left    steady_solid_wall
-uvw_BC Left    sliding_solid_wall    -1.0    -2.0
-uvw_BC Right   sliding_solid_wall    -3.0    -4.0
-uvw_BC Down    sliding_solid_wall    -5.0    -6.0
-uvw_BC Up      sliding_solid_wall    -7.0    -8.0
-uvw_BC Back    sliding_solid_wall    -9.0    -10.0
-uvw_BC Front   sliding_solid_wall    -11.0   -12.0
+uvw_BC Left    sliding_solid_wall    .0    .0
+uvw_BC Right   sliding_solid_wall    .0    .0
+uvw_BC Down    sliding_solid_wall    .0    .0
+uvw_BC Up      sliding_solid_wall   1.0    .0
+uvw_BC Back    sliding_solid_wall    .0    .0
+uvw_BC Front   sliding_solid_wall    .0    .0
 
 # spatial discretization
 # number of cells per dimension (ndims integer numbers)
-N             10      10      10
+N             32      32      32
 # spacings along each dimension (ndims integers)
 spacings       1       1       1
 # differential schemes

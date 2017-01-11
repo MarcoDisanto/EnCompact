@@ -10,7 +10,7 @@ TYPE(block), DIMENSION(:), ALLOCATABLE :: gradp  ! block storing pressure gradie
 CONTAINS
 
 
-  SUBROUTINE p_grad_set
+  SUBROUTINE set_grad_p
 
     USE variables
     USE MPI_module, ONLY: ndims
@@ -32,7 +32,7 @@ CONTAINS
       gradp(i)%values = NaN
     END DO
 
-  END SUBROUTINE p_grad_set
+  END SUBROUTINE set_grad_p
 
 
 
@@ -201,7 +201,11 @@ CONTAINS
     CALL divergence_calc
 
     !!!!!!!!!! Pressure term !!!!!!!!!!
+    IF (myid==0) PRINT *, ''
+    IF (myid==0) PRINT *, 'start ellit'
     CALL Solve_p
+    IF (myid==0) PRINT *, 'ellit converged'
+    IF (myid==0) PRINT *, ''
     CALL p_grad_calc
 
     !!!!!!!!!! Pressure correction !!!!!!!!!!
