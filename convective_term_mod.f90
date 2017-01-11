@@ -245,6 +245,27 @@ CONTAINS
     NaN = IEEE_VALUE(r, IEEE_QUIET_NAN) ! NaN of the same type as r
 
 
+    !NOTE: homogeneus terms have additional layers only along the direction of their component
+    ! i.e. u^2 only along x. This means that it is fine to give SPIKE_solve2 the whole 3d array
+    ! using ":" for the remaining directions. The result is something like:
+    !
+    ! velvel(1, 1)%values(velvel(1, 1)%b(1, 1) : velvel(1, 1)%b(1, 2), :, :)
+    !
+    ! which translates into:
+    !
+    ! u^2(internal nodes, :, :)
+    !
+    ! Cross products instead have additional layers (for boundaries and overlaps) along two
+    ! directions. THus it is safer to write something like:
+    !
+    ! velvel(2, 1)%values(velvel(2, 1)%b(1, 1) : velvel(2, 1)%b(1, 2), &
+    !                     velvel(2, 1)%b(2, 1) : velvel(2, 1)%b(2, 2), &
+    !                     velvel(2, 1)%b(3, 1) : velvel(2, 1)%b(3, 2))
+    !
+    ! which translates into:
+    !
+    ! uv(internal nodes, internal nodes, internal nodes)
+
       !!!!!!!!!! x interpolation !!!!!!!!!!
       id = 1
       ! homogeneus products
@@ -299,7 +320,9 @@ CONTAINS
         END DO
       END DO
       DEALLOCATE(q)
-      CALL SPIKE_solve2(id, ider, istag, intvel(id)%values(intvel(id)%b(id, 1) : intvel(id)%b(id, 2), :, :))
+      CALL SPIKE_solve2(id, ider, istag, intvel(id)%values(intvel(id)%b(id, 1) : intvel(id)%b(id, 2), &
+                                                           intvel(id)%b(2, 1)  : intvel(id)%b(2, 2), &
+                                                           intvel(id)%b(3, 1)  : intvel(id)%b(3, 2)))
       ! need to add boundary values
       IF (mycoords(id)==0) THEN
         intvel(id)%values(intvel(id)%b_bo(1, 1), &
@@ -334,7 +357,9 @@ CONTAINS
         END DO
       END DO
       DEALLOCATE(q)
-      CALL SPIKE_solve2(id, ider, istag, velvel(2, ic)%values(velvel(2, ic)%b(id, 1) : velvel(2, ic)%b(id, 2), :, :))
+      CALL SPIKE_solve2(id, ider, istag, velvel(2, ic)%values(velvel(2, ic)%b(id, 1) : velvel(2, ic)%b(id, 2), &
+                                                              velvel(2, ic)%b(2, 1)  : velvel(2, ic)%b(2, 2), &
+                                                              velvel(2, ic)%b(3, 1)  : velvel(2, ic)%b(3, 2)))
       ! need to add boundary values
       IF (mycoords(id)==0) THEN
         velvel(2, ic)%values(velvel(2, ic)%b_bo(1, 1), &
@@ -409,7 +434,9 @@ CONTAINS
         END DO
       END DO
       DEALLOCATE(q)
-      CALL SPIKE_solve2(id, ider, istag, intvel(id)%values(:, intvel(id)%b(id, 1) : intvel(id)%b(id, 2), :))
+      CALL SPIKE_solve2(id, ider, istag, intvel(id)%values(intvel(id)%b(1, 1)  : intvel(id)%b(1, 2), &
+                                                           intvel(id)%b(id, 1) : intvel(id)%b(id, 2), &
+                                                           intvel(id)%b(3, 1)  : intvel(id)%b(3, 2)))
       ! need to add boundary values
       IF (mycoords(id)==0) THEN
         intvel(id)%values(intvel(id)%b(1, 1):intvel(id)%b(1, 2), &
@@ -444,7 +471,9 @@ CONTAINS
         END DO
       END DO
       DEALLOCATE(q)
-      CALL SPIKE_solve2(id, ider, istag, velvel(2, ic)%values(:, velvel(2, ic)%b(id, 1) : velvel(2, ic)%b(id, 2), :))
+      CALL SPIKE_solve2(id, ider, istag, velvel(2, ic)%values(velvel(2, ic)%b(1, 1)  : velvel(2, ic)%b(1, 2), &
+                                                              velvel(2, ic)%b(id, 1) : velvel(2, ic)%b(id, 2), &
+                                                              velvel(2, ic)%b(3, 1)  : velvel(2, ic)%b(3, 2)))
       ! need to add boundary values
       IF (mycoords(id)==0) THEN
         velvel(2, ic)%values(velvel(2, ic)%b(1, 1):velvel(2, ic)%b(1, 2), &
@@ -518,7 +547,9 @@ CONTAINS
         END DO
       END DO
       DEALLOCATE(q)
-      CALL SPIKE_solve2(id, ider, istag, intvel(id)%values(:, :, intvel(id)%b(id, 1) : intvel(id)%b(id, 2)))
+      CALL SPIKE_solve2(id, ider, istag, intvel(id)%values(intvel(id)%b(1, 1)  : intvel(id)%b(1, 2), &
+                                                           intvel(id)%b(2, 1)  : intvel(id)%b(2, 2), &
+                                                           intvel(id)%b(id, 1) : intvel(id)%b(id, 2)))
       ! need to add boundary values
       IF (mycoords(id)==0) THEN
         intvel(id)%values(intvel(id)%b(1, 1):intvel(id)%b(1, 2), &
@@ -553,7 +584,9 @@ CONTAINS
         END DO
       END DO
       DEALLOCATE(q)
-      CALL SPIKE_solve2(id, ider, istag, velvel(2, ic)%values(:, :, velvel(2, ic)%b(id, 1) : velvel(2, ic)%b(id, 2)))
+      CALL SPIKE_solve2(id, ider, istag, velvel(2, ic)%values(velvel(2, ic)%b(1, 1) : velvel(2, ic)%b(1, 2), &
+                                                              velvel(2, ic)%b(2, 1) : velvel(2, ic)%b(2, 2), &
+                                                              velvel(2, ic)%b(id, 1) : velvel(2, ic)%b(id, 2)))
       ! need to add boundary values
       IF (mycoords(id)==0) THEN
         velvel(2, ic)%values(velvel(2, ic)%b(1, 1):velvel(2, ic)%b(1, 2), &
