@@ -650,7 +650,6 @@ SELECT CASE(id)
 
 END SELECT
 
-!IF (myid==0) CALL printmatrix(PSI)
 
 CALL MPI_TYPE_FREE(MPI_1slab_type, ierr)
 CALL MPI_TYPE_FREE(MPI_1slab_res, ierr)

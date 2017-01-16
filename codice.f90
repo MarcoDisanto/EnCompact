@@ -135,148 +135,30 @@ end if
 
 CALL Set_p
 
-
-! Allocation of source term in the Poisson equation
-ALLOCATE(b(indv(1,1):indv(1,2),indv(2,1):indv(2,2),indv(3,1):indv(3,2)))
-! Questo termine deve essere in realtà la divergenza del campo *
-b = .0
-IF (myid == 13) THEN
-    nun = FLOOR(REAL(SIZE(b, 1))/2)
-    b(nun,nun,nun) = 1.0
-    !b(1,3,1) = -1.0
-END IF
-
-! uvwp(4)%values=100.0
-p = 0
-! CALL RANDOM_NUMBER(p)
-! p = myid
-
 ! Master process deallocates grids (which have been used to set the compacts),
 ! and other stuff.
 CALL deallocate_grids
-
-! Solve Poisson equation for pressure
-!CALL Solve_p
-
-! writing text files for the pressure field's post processing phase
-CALL MPI_BARRIER(procs_grid, ierr)
-DO i = 0, nprocs-1
-    IF (myid == i) THEN
-        IF (i == 0) THEN
-            OPEN (UNIT = out_unit, FILE = 'domain.txt', ACTION = 'write', STATUS = 'replace')
-        ELSE
-            OPEN (UNIT = out_unit, FILE = 'domain.txt', ACTION = 'write', ACCESS = 'append', STATUS = 'old')
-        END IF
-        WRITE(out_unit,*) myid, N(1), N(2), N(3)
-        CLOSE(out_unit)
-    END IF
-    CALL MPI_BARRIER(procs_grid, ierr)
-END DO
-
-DO i = 0, nprocs-1
-    IF (myid == i) THEN
-        IF (i == 0) THEN
-            OPEN (UNIT = out_unit, FILE = 'pressure.txt', ACTION = 'write', STATUS = 'replace')
-        ELSE
-            OPEN (UNIT = out_unit, FILE = 'pressure.txt', ACTION = 'write', ACCESS = 'append', STATUS = 'old')
-        END IF
-        WRITE(out_unit,*) p
-        ! WRITE(out_unit,*) uvwp(4)%values
-        CLOSE(out_unit)
-    END IF
-    CALL MPI_BARRIER(procs_grid, ierr)
-END DO
 
 CALL set_diff_bounds
 CALL set_conv_bounds
 CALL set_conv_bc
 CALL set_grad_p
 
+! Allocation of source term in the Poisson equation
+ALLOCATE(b(indv(1,1):indv(1,2),indv(2,1):indv(2,2),indv(3,1):indv(3,2)))
+! Questo termine deve essere in realtà la divergenza del campo *
 
-!!!!!! PROVE !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!DO i = 1, 3
-!
-!IF (mycoords(3)==0) THEN
-!  DO j = uvwp(i)%b_bc(3, 1), uvwp(i)%b(3, 2)
-!      uvwp(i)%values(uvwp(i)%b_bc(1, 1):uvwp(i)%b_bc(1, 2), &
-!                     uvwp(i)%b_bc(2, 1):uvwp(i)%b_bc(2, 2), &
-!                     j) = j + 0.5*logical2integer(j==0)
-!  END DO
-!END IF
-!CALL SPIKE_exchange_uvw
-!IF (mycoords(3)==1) THEN
-!  DO j = uvwp(i)%b(3, 1), uvwp(i)%b(3, 2)
-!      uvwp(i)%values(uvwp(i)%b_bc(1, 1):uvwp(i)%b_bc(1, 2), &
-!                     uvwp(i)%b_bc(2, 1):uvwp(i)%b_bc(2, 2), &
-!                     j) = j + uvwp(i)%values(uvwp(i)%b(1, 1), &
-!                                             uvwp(i)%b(2, 1), &
-!                                             uvwp(i)%b(3, 1)-1)
-!  END DO
-!END IFi = 1, 10
-!  IF (myid==iii) PRINT *, i
-!  CALL ExplEuler
-!CALL SPIKE_exchange_uvw
-!IF (mycoords(3)==2) THEN
-!  DO j = uvwp(i)%b(3, 1), uvwp(i)%b_bc(3, 2)
-!      uvwp(i)%values(uvwp(i)%b_bc(1, 1):uvwp(i)%b_bc(1, 2), &
-!                     uvwp(i)%b_bc(2, 1):uvwp(i)%b_bc(2, 2), &
-!                     j) = j + uvwp(i)%values(uvwp(i)%b(1, 1), &
-!                                             uvwp(i)%b(2, 1), &
-!                                             uvwp(i)%b(3, 1)-1) + &
-!                          (-0.5)*logical2integer(j==4)*logical2integer(i/=3)
-!  END DO
-!END IF
-!CALL SPIKE_exchange_uvw
-!
-!!uvwp(i)%values = 2
-!!uvwp(i)%values = uvwp(i)%values**2
-!
-!END DO
-
-
-
-!CALL diff_calc
-!CALL conv_interp
-!CALL conv_exchange
-!CALL conv_calc
-!CALL divergence_calc
-!CALL solve_p
-!CALL p_exchange
-
-
+! TODO: inserire dt e ni nel file di input e modificare il modulo di lettura in
+! maniera opportuna
 dt = 1e-3
 ni = 1e-1
 
-iii = 13
-
-DO i = 1, 1000
+DO i = 1, 10
   IF (myid==iii) PRINT *, i
   CALL ExplEuler(dt, ni)
 END DO
 CALL SPIKE_exchange_uvw
 CALL divergence_calc
-
-i = 1
-!IF (myid==iii) PRINT *, [(j, j = 1, uvwp(i)%b(1, 2)-uvwp(i)%b(1, 1)+1)]
-IF (myid==iii) CALL printmatrix(uvwp(i)%values)
-!IF (myid==iii) CALL printmatrix(diffvel(i)%values)
-!IF (myid==iii) CALL printmatrix(velvel(1, i)%values)
-!IF (myid==iii) CALL printmatrix(velvel(2, i)%values)
-!IF (myid==iii) CALL printmatrix(intvel(1)%values)
-!IF (myid==iii) PRINT *, velvel(2, i)%b
-!IF (myid==iii) PRINT *, velvel(2, i)%b_ol
-!IF (myid==iii) CALL printmatrix(convvel(i)%values)
-!IF (myid==iii) CALL printmatrix(b)
-!IF (myid==iii) CALL printmatrix(gradp(i)%values)
-!IF (myid==iii) CALL printmatrix(p)
-!IF (myid==iii) CALL printmatrix(uvwp(4)%values)
-
-!IF (myid==13) CALL printmatrix(GraDiv(1, 2)%matrix)
-!IF (myid==iii) CALL printmatrix(Lapl(i)%matrix)
-!IF (myid==iii) CALL printmatrix(weigC_grid)
-
-
-
 
 
 CALL set_output
