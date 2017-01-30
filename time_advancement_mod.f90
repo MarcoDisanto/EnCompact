@@ -6,13 +6,17 @@ USE essentials
 IMPLICIT NONE
 
 TYPE(block), DIMENSION(:), ALLOCATABLE :: gradp  ! block storing pressure gradients
+! residuals (velocity differences)
+REAL, DIMENSION(3)                     :: vel_diff_proc       ! max velocity components differences for each process
+REAL                                   :: max_vel_diff_proc   ! max velocity difference among all components, but for each process
+REAL                                   :: vel_res             ! max difference among all components and processes (true residual)
 
 CONTAINS
 
 
   SUBROUTINE set_grad_p
 
-    USE variables
+    !USE variables
     USE MPI_module, ONLY: ndims
     USE, INTRINSIC :: IEEE_ARITHMETIC ! to use IEEE routines
 
@@ -42,7 +46,6 @@ CONTAINS
     ! name was chosen for the sake of clarity...cough! cough!
 
     USE set_pressure
-    USE variables
     USE bandedmatrix
 
     IMPLICIT NONE
@@ -96,11 +99,11 @@ CONTAINS
   END SUBROUTINE divergence_calc
 
 
+
   SUBROUTINE p_grad_calc
     ! Routine calculating pressure gradients used in the correction step.
 
     USE set_pressure
-    USE variables
     USE bandedmatrix
 
     IMPLICIT NONE
@@ -164,6 +167,29 @@ CONTAINS
   END SUBROUTINE p_grad_calc
 
 
+
+  SUBROUTINE residual_eval
+
+    USE MPI
+
+    INTEGER :: i, ierr
+
+    DO i = 1, 3
+
+      vel_diff_proc(i) = MAXVAL(ABS(uvwp(i)%values(uvwp(i)%b(1, 1) : uvwp(i)%b(1, 2), &
+                                                   uvwp(i)%b(2, 1) : uvwp(i)%b(2, 2), &
+                                                   uvwp(i)%b(3, 1) : uvwp(i)%b(3, 2)) - uvwp_old(i)%values))
+
+    END DO
+
+    max_vel_diff_proc = MAXVAL(vel_diff_proc)
+    CALL MPI_ALLREDUCE(max_vel_diff_proc, vel_res, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_WORLD, ierr)
+
+
+  END SUBROUTINE
+
+
+
   SUBROUTINE ExplEuler(dt, ni)
     ! Routine that calculates the velocity field at the next time step. This version
     ! supports explicit Euler formula only. More sophisticated time schemes will
@@ -201,11 +227,7 @@ CONTAINS
     CALL divergence_calc
 
     !!!!!!!!!! Pressure term !!!!!!!!!!
-    IF (myid==0) PRINT *, ''
-    IF (myid==0) PRINT *, 'start ellit'
     CALL Solve_p
-    IF (myid==0) PRINT *, 'ellit converged'
-    IF (myid==0) PRINT *, ''
     CALL p_grad_calc
 
     !!!!!!!!!! Pressure correction !!!!!!!!!!

@@ -221,6 +221,12 @@ CONTAINS
       END DO
       WRITE(dev, *) ''
 
+      WRITE(dev, *) 'Execution time'
+      DO i = 0, 0
+        WRITE(dev, *) t_exec
+      END DO
+      WRITE(dev, *) ''
+
     END IF
 
   END SUBROUTINE output_read_aid

@@ -61,7 +61,7 @@ CONTAINS
         CALL set_var
 
     END SUBROUTINE Set_p
-    
+
 
     SUBROUTINE set_pres_weig
     ! Alfonsina l'ha scritta modificando set_compacts del modulo compact_mod.f90
@@ -86,25 +86,31 @@ CONTAINS
 
         DO i = 1, ndims
             IF (myid == 0) THEN
-                !!!!!!!!!!!!!!!!!!!!!CALCOLO PESI lAPLACIANO GLOBALE!!!!!!!!!!!!
+                !!!!!!!!!!!!!!!!!!!!!CALCOLO PESI LAPLACIANO GLOBALE!!!!!!!!!!!!
                 ! GraDiv_glob(i,1)%matrix(        1,:) = 0
                 ! GraDiv_glob(i,1)%matrix(Ntot(i)+1,:) = 0
                 Bg = GraDiv_glob(i,2)*GraDiv_glob(i,1)
                 ! Bg%matrix(1,0) = Bg%matrix(1,0) - 1
                 ! Bg%matrix(Ntot(i),0) = Bg%matrix(Ntot(i),0) - 1
-                !IF (i == 3) THEN
+                !IF (i == 1) THEN
+                !    print *, ''
                 !    print *, 'divergenza'
+                !    PRINT *, GraDiv_glob(i,2)%lb, GraDiv_glob(i,2)%ub
                 !    CALL printmatrix(GraDiv_glob(i,2)%matrix)
+                !    print *, ''
                 !    print *, 'gradiente'
+                !    PRINT *, GraDiv_glob(i,1)%lb, GraDiv_glob(i,1)%ub
                 !    CALL printmatrix(GraDiv_glob(i,1)%matrix)
+                !    print *, ''
                 !    print *, 'laplaciano'
+                !    PRINT *, Bg%lb, Bg%ub
                 !    CALL printmatrix(Bg%matrix)
                 !END IF
                 ! TO DO: le quattro seguenti assegnazioni vanno eliminate assieme alla
                 ! modifica da fare al modulo compact_mod.f90 e alla routine spread_CDS e
                 ! build_GraDiv_glob del presente modulo.
                 ! Inoltre il prodotto tra matrici CDS (funzione CDS_mat_x_CDS_mat del
-                ! modulo bandedmatrix_mod.f90) automaticamente assegna la banda
+                ! modulo bandedmatrix_mod.f90) assegna automaticamente la banda
                 ! totale della matrice prodotto, ma non quella interna. Dovrei
                 ! codificare l'assegnazione di questa informazione ad un nuovo campo
                 ! del tipo CDS, in maniera tale da poter eliminare le PORCATE.
@@ -131,6 +137,8 @@ CONTAINS
 
     SUBROUTINE build_GraDiv_glob(i,k)
 
+        USE essentials, ONLY: logical2integer
+
         IMPLICIT NONE
 
         INTEGER, INTENT(IN) :: i, k
@@ -138,6 +146,7 @@ CONTAINS
         REAL, ALLOCATABLE, DIMENSION(:) :: grid_appoL, grid_appoR
         CHARACTER(len = 20), DIMENSION(:), ALLOCATABLE :: sch
         INTEGER :: j = 1
+        REAL                            :: h ! spacing needed to create fictional faces and cells in the periodic case
 
         TYPE(CDS) :: Afake ! this is bound to be the identity matrix, since schemes are explicit
 
@@ -154,12 +163,30 @@ CONTAINS
             ! faccia, e la cella N(i)+1, che coincide con l'ultima faccia.
             ! Negli altri 3 casi, cioè all_grids( , ,1,1), all_grids( , ,2,1) e
             ! all_grids( , ,2,2), le griglie coincidono.
-            if(k == 1)THEN
-                grid_appoL = all_grids(i,j,k,1)%g!Facce
+            IF (k == 1) THEN
+                grid_appoL = all_grids(i,j,k,1)%g(1:Ntot(i)+1-logical2integer(periodic(i)))!Facce
                 grid_appoR = all_grids(i,j,k,2)%g(1:Ntot(i))!Celle
+                ! periodicity correction (mesh widening)
+                IF (periodic(i)) THEN
+                  h = all_grids(i,j,k,2)%g(2)-all_grids(i,j,k,2)%g(1)
+                  grid_appoL = [grid_appoL, grid_appoL(Ntot(i)+1-logical2integer(periodic(i)))+h]
+                  grid_appoR = [grid_appoR(1)-h, grid_appoR, grid_appoR(Ntot(i))+h]
+                END IF
+                !print *, 'k =', k, 'grid_appoL =', grid_appoL
+                !print *, 'k =', k, 'grid_appoR =', grid_appoR
+                !print *, LBOUND(grid_appoL), UBOUND(grid_appoL)
+                !print *, LBOUND(grid_appoR), UBOUND(grid_appoR)
             ELSE
                 grid_appoL = all_grids(i,j,k,1)%g!Celle
                 grid_appoR = all_grids(i,j,k,2)%g!Facce
+                ! periodicity correction (mesh widening)
+                IF (periodic(i)) THEN
+                  h = all_grids(i,j,k,2)%g(2)-all_grids(i,j,k,2)%g(1)
+                  grid_appoR = [grid_appoR, grid_appoR(Ntot(i))+h]
+                  !print *, 'k =', k, 'grid_appoR =', grid_appoR
+                  !print *, LBOUND(grid_appoL), UBOUND(grid_appoL)
+                  !print *, LBOUND(grid_appoR), UBOUND(grid_appoR)
+                END IF
             ENDIF
 
             ! lower and upper bounds of full counterparts of matrices A and B along the two dimensions:
@@ -173,6 +200,14 @@ CONTAINS
             Bg%lb    = [lbound(grid_appoL), lbound(grid_appoR)]
             Bg%ub    = [ubound(grid_appoL), ubound(grid_appoR)]
 
+            IF (k==1 .AND. periodic(i)) THEN
+              Bg%lb(2) = Bg%lb(2) - 1
+              Bg%ub(2) = Bg%ub(2) - 1
+
+              PRINT *, Bg%lb
+              PRINT *, Bg%ub
+            END IF
+
             ! lower and upper band of B matrix...
             Bband_tot = detBband(sch)      ! ... considering all  the      rows
             Bband_int = detBband(sch(0:0)) ! ... considering only internal rows
@@ -180,10 +215,10 @@ CONTAINS
             Bg%ud = +Bband_tot(2) ! number of upper diagonals (positive if upper diagonals are present)
             ! allocate matrices A and B
             ALLOCATE(Afake%matrix(Afake%lb(1):Afake%ub(1),      0:0))
-            ALLOCATE(Bg%matrix(Bg%lb(1):Bg%ub(1),          -Bg%ld:Bg%ud))
+            ALLOCATE(Bg%matrix(Bg%lb(1):Bg%ub(1),          -Bg%ld:+Bg%ud))
 
             ! fill the matrices A and B
-            CALL calc_compact_matrices(grid_appoL, grid_appoR, Afake%matrix, Bg%matrix, sch)
+            CALL calc_compact_matrices(grid_appoL, grid_appoR, Afake%matrix, Bg%matrix, sch, periodic(i))
 
             DEALLOCATE(Afake%matrix,sch, grid_appoL, grid_appoR)
             GraDiv_glob(i,k) = Bg

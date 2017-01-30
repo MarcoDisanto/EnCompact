@@ -215,7 +215,7 @@ CONTAINS
                     !                               \
 
                     detBband = [min(detBband(1), -3), max(detBband(2), +2)]
-                
+
                 CASE ('D1_c2f_1E_L')
                     ! 1-th order explicit first derivative scheme from faces to centers
                     !           o       o
@@ -224,7 +224,7 @@ CONTAINS
                     !       \
 
                     detBband = [min(detBband(1), 0), max(detBband(2), +1)]
-                
+
                 CASE ('D1_c2f_2E_L')
                     ! 2-th order explicit first derivative scheme from faces to centers
                     !           o       o       o
@@ -233,7 +233,7 @@ CONTAINS
                     !       \
 
                     detBband = [min(detBband(1), 0), max(detBband(2), +2)]
-                
+
                 CASE ('D1_c2f_3E_L')
                     ! 3-th order explicit first derivative scheme from faces to centers
                     !   o       o       o       o
@@ -323,7 +323,7 @@ CONTAINS
                     !       \
 
                     detBband = [min(detBband(1), 0), max(detBband(2), +6)]
-                
+
                 CASE ('D1_c2f_1E_R')
                     ! 3-th order explicit first derivative scheme from faces to centers
                     !                   o       o
@@ -332,7 +332,7 @@ CONTAINS
                     !                               \
 
                     detBband = [min(detBband(1), -2), max(detBband(2), -1)]
-                
+
                 CASE ('D1_c2f_2E_R')
                     ! 3-th order explicit first derivative scheme from faces to centers
                     !           o       o       o
@@ -341,7 +341,7 @@ CONTAINS
                     !                               \
 
                     detBband = [min(detBband(1), -3), max(detBband(2), -1)]
-                
+
                 CASE ('D1_c2f_3E_R')
                     ! 3-th order explicit first derivative scheme from faces to centers
                     !                   o       o       o       o
@@ -535,9 +535,12 @@ CONTAINS
                 CASE ('zero')
                     ! No boundary scheme
 
+                CASE ('periodic')
+                    ! Periodic schemes do not alter band width
+
                 CASE DEFAULT
 
-                    PRINT *, 'Error in compact_mod.f90: no such scheme defined.'
+                    PRINT *, 'Error in library_mod.f90: no such scheme defined.'
                     PRINT *, schemes(i)
                     CALL MPI_ABORT(MPI_COMM_WORLD,errorcode,ierr)
                     STOP

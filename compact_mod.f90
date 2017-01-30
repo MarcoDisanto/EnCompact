@@ -155,7 +155,8 @@ CONTAINS
 
                         ! fill the matrices A and B
                         CALL calc_compact_matrices(all_grids(i,j,k,1)%g, all_grids(i,j,k,2)%g, &
-                          & Ag%matrix, Bg%matrix, sch)
+                          & Ag%matrix, Bg%matrix, sch, periodic(i))
+
 
                         ! ******************* da eliminare
                         ! per usare printmatrix devi usare il modulo essentials
@@ -220,18 +221,19 @@ CONTAINS
                             END SELECT
                             iu = il + nequ_v(pindex) - 1
 
+
                             ! send the chunks of A
                             CALL MPI_SEND(Ag%matrix(il:iu,:), 3*nequ_v(pindex), &
                                     & MPI_DOUBLE_PRECISION, pindex, 123, MPI_COMM_WORLD, ierr)
 
                             ! send the chunks of B
-                            IF (pcoord(i) == 0) THEN ! process at the 'minus' border
+                            IF (pcoord(i) == 0 .AND. .NOT.periodic(i)) THEN ! process at the 'minus' border
 
                                 CALL MPI_SEND(Bg%matrix(il:iu, Bband_int(1):Bband_tot(2)), &
                                         & (Bband_tot(2) - Bband_int(1) + 1)*nequ_v(pindex), &
                                         & MPI_DOUBLE_PRECISION, pindex, 12, MPI_COMM_WORLD, ierr)
 
-                            ELSE IF (pcoord(i) == dims(i) - 1) THEN ! process at the 'plus' border
+                            ELSE IF (pcoord(i) == dims(i) - 1 .AND. .NOT.periodic(i)) THEN ! process at the 'plus' border
 
                                 CALL MPI_SEND(Bg%matrix(il:iu, Bband_tot(1):Bband_int(2)), &
                                         & (Bband_int(2) - Bband_tot(1) + 1)*nequ_v(pindex), &
@@ -253,14 +255,14 @@ CONTAINS
                     ENDIF master_proc_scatters_compacts
 
                     ! each process allocates A and receives the proper chunk of it
-                    IF (mycoords(i) == 0) THEN
+                    IF (idm(i) == MPI_PROC_NULL) THEN
 
                       cmp(i,j,k)%A%lb  = [1, (2-j)/2*(3-k) + &
                                              (j/2)*k       + &
                                              (2-j)*j]                ! not intuitive, it exploits the limitations on integer division
-                      cmp(i,j,k)%A%lb(1) = cmp(i,j,k)%A%lb(2)        ! this corrects column indices
+                      cmp(i,j,k)%A%lb(1) = cmp(i,j,k)%A%lb(2)        ! this corrects row indices
                       cmp(i,j,k)%A%ub  = [Neq(i,j,k), cmp(i,j,k)%A%lb(2) + Neq(i,j,k) - 1]
-                      cmp(i,j,k)%A%ub(1) = cmp(i,j,k)%A%ub(2)        ! this corrects column indices
+                      cmp(i,j,k)%A%ub(1) = cmp(i,j,k)%A%ub(2)        ! this corrects row indices
                       cmp(i,j,k)%A%ld  = 1
                       cmp(i,j,k)%A%ud  = 1
                       cmp(i,j,k)%A%lid = 1
@@ -284,7 +286,7 @@ CONTAINS
                     END IF
 
                     ! each process allocates B and receives the proper chunk of it
-                    IF (mycoords(i) == 0) THEN ! process at the 'minus' border
+                    IF (idm(i) == MPI_PROC_NULL) THEN ! process at the 'minus' border
 
                         cmp(i,j,k)%B%ld  = -Bband_int(1)
                         cmp(i,j,k)%B%ud  = +Bband_tot(2)
@@ -302,7 +304,7 @@ CONTAINS
                         CALL MPI_RECV(cmp(i,j,k)%B%matrix, (Bband_tot(2) - Bband_int(1) + 1)*Neq(i,j,k), &
                                         & MPI_DOUBLE_PRECISION, 0, 12, MPI_COMM_WORLD, MPI_STATUS_IGNORE, ierr)
 
-                    ELSE IF (mycoords(i) == dims(i) - 1) THEN ! process at the 'plus' border
+                    ELSE IF (idp(i) == MPI_PROC_NULL) THEN ! process at the 'plus' border
 
                         cmp(i,j,k)%B%ld  = -Bband_tot(1)
                         cmp(i,j,k)%B%ud  = +Bband_int(2)
@@ -433,12 +435,13 @@ CONTAINS
     END SUBROUTINE compact_coeffs
 
 
-    SUBROUTINE calc_compact_matrices(xL, xR, Adummy, Bdummy, schemes)
+    SUBROUTINE calc_compact_matrices(xL, xR, Adummy, Bdummy, schemes, periodicity)
     ! The present procedure fills the matrices Adummy and Bdummy of the compact
     ! schemes, based on the LHS mesh xL and RHS mesh xR, using boundary and
     ! central schemes described by the variable schemes (cf. comments below).
 
-        USE MPI, ONLY : MPI_COMM_WORLD
+        USE MPI,        ONLY : MPI_COMM_WORLD
+        USE library,    ONLY: detBband
 
         IMPLICIT NONE
 
@@ -446,7 +449,7 @@ CONTAINS
         REAL,                DIMENSION(:),   ALLOCATABLE, INTENT(IN)    :: xL, xR         ! LHS and RHS meshes
         REAL,                DIMENSION(:,:), ALLOCATABLE, INTENT(INOUT) :: Adummy, Bdummy ! LHS and RHS matrix
         CHARACTER(len = 20), DIMENSION(:),   ALLOCATABLE, INTENT(IN)    :: schemes        ! array of strings identifying the schemes (see below)
-
+        LOGICAL,                                          INTENT(IN)    :: periodicity
         ! The variable 'schemes' is an array of type CHARACTER(len = 20), that is,
         ! its elements are strings 20 characters long. The string is supposed to
         ! contain the tag of the scheme (e.g. it can contain ____________ to point
@@ -474,9 +477,23 @@ CONTAINS
                              ! sized (m,m), Bdummy matrix is sized (m,n).
         INTEGER :: mfirst, mlast
         REAL, DIMENSION(:), ALLOCATABLE :: coeffs ! coefficients of the scheme
+        INTEGER, DIMENSION(2) :: Bband            ! bandwidth of matrix B, used in the periodic case
+                                                  ! to identify troublesome rows, i.e. the ones whose equation
+                                                  ! needs values outside of the nominal mesh. Beware that
+                                                  ! the first element is going to be negative
 
-        nLs = -lbound(schemes, 1)
-        nRs = +ubound(schemes, 1)
+        Bband = detBband(schemes(0:0))
+
+        IF (periodicity) THEN
+          ! in the periodic case the number of schemes inserted is ignored;
+          ! "boundary" rows are therefore identified using informations about
+          ! the central scheme
+          nLs = -Bband(1)
+          nRs = +Bband(2)
+        ELSE
+          nLs = -lbound(schemes, 1)
+          nRs = +ubound(schemes, 1)
+        END IF
 
         mfirst = lbound(Adummy, 1)
         mlast  = ubound(Adummy, 1)
@@ -673,9 +690,24 @@ CONTAINS
 
         END SELECT internal_scheme
 
+        ! NOTE: in the periodic case coefficient for points near the boundaries
+        ! are not calculated, but just made equal to the ones of the internal scheme
+        IF (periodicity) THEN
+          ! just copy the coefficients of the internal scheme
+          left_points_per: DO i = mfirst,mfirst+nLs-1
+            Adummy(i, :) = Adummy(mfirst+nLs, :)
+            Bdummy(i, :) = Bdummy(mfirst+nLs, :)
+          END DO left_points_per
 
-        ! determination of coefficients for points near the left boundary
-        left_points: DO i = mfirst,mfirst+nLs-1
+          ! just copy the coefficients of the internal scheme
+          right_points_per: DO i = mlast-nRs+1,mlast
+            Adummy(i, :) = Adummy(mlast-nRs, :)
+            Bdummy(i, :) = Bdummy(mlast-nRs, :)
+          END DO right_points_per
+
+        ELSE
+          ! determination of coefficients for points near the left boundary
+          left_points: DO i = mfirst,mfirst+nLs-1
 
             left_schemes: SELECT CASE (schemes(i-mfirst+1-nLs-1))
 
@@ -1036,6 +1068,9 @@ CONTAINS
                     ! No boundary scheme
                     Bdummy(i,:) = 0
 
+                CASE ('periodic')
+                    ! Periodic scheme (just a copy of following scheme)
+                    Bdummy(i,:) = Bdummy(i+1,:)
 
                 CASE DEFAULT
 
@@ -1046,10 +1081,10 @@ CONTAINS
 
             END SELECT left_schemes
 
-        ENDDO left_points
+          ENDDO left_points
 
-        ! determination of coefficients for points near the right boundary
-        right_points: DO i = mlast-nRs+1,mlast
+          ! determination of coefficients for points near the right boundary
+          right_points: DO i = mlast-nRs+1,mlast
 
             right_schemes: SELECT CASE (schemes(i-mlast+nRs))
 
@@ -1415,6 +1450,9 @@ CONTAINS
                     ! No boundary scheme
                     Bdummy(i,:) = 0
 
+                CASE ('periodic')
+                    ! Periodic scheme (just a copy of preceding scheme)
+                    Bdummy(i,:) = [99,99]!Bdummy(i-1,:)
 
                 CASE DEFAULT
 
@@ -1425,7 +1463,9 @@ CONTAINS
 
             END SELECT right_schemes
 
-        ENDDO right_points
+          ENDDO right_points
+
+        END IF
 
     END SUBROUTINE calc_compact_matrices
 

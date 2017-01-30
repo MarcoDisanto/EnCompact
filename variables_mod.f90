@@ -8,13 +8,13 @@ MODULE variables
 !    SUBROUTINE set_nans
 
     IMPLICIT NONE
-    
+
     ! questo deve essere spostato altrove (nell'input) TO DO
     ! in realtà dovrebbe essere collegato anche a ndims;
     ! qualcosa tipo ndims + 1 + altro_scalare + ndims*altro_vettoriale
     ! (ndims componenti di velocità, 1 pressione, altre grandezze)
     INTEGER, PARAMETER :: n_flow_variables = 4
-    
+
     ! WORK IN PROGRESS
     ! TO DO: il tipo pencil è proprio il tipo grid1D. Bisogna sostituire
     ! quest'ultimo.
@@ -35,10 +35,14 @@ MODULE variables
         INTEGER, DIMENSION(:,:),   ALLOCATABLE :: b_ol ! bounds not considering  borders, but overlap
         INTEGER, DIMENSION(:,:),   ALLOCATABLE :: b_bo ! bounds considering both borders  and overlap
     END TYPE block
-    TYPE(block), DIMENSION(n_flow_variables), TARGET :: uvwp ! TO DO: meglio 0:n_flow_variables-1, associando 0 alla pressione e 1,... alle componenti di velocità
+    TYPE(block), DIMENSION(n_flow_variables), TARGET :: uvwp, uvwp_old ! TO DO: meglio 0:n_flow_variables-1, associando 0 alla pressione e 1,... alle componenti di velocità
 
     ! MPI types to manage communications
     INTEGER, DIMENSION(:,:), ALLOCATABLE :: MPI_flats_m, MPI_flats_p
+
+    ! time variables
+    REAL :: t_start, t_end, t_exec_proc, t_exec ! needed for the calculation of execution times
+
 
 CONTAINS
 
@@ -63,6 +67,7 @@ CONTAINS
         ALLOCATE(MPI_flats_m(ndims,ndims), MPI_flats_p(ndims,ndims))
         DO i = 1, n_flow_variables
             ALLOCATE(uvwp(i)%b(ndims, 2), uvwp(i)%b_bc(ndims, 2), uvwp(i)%b_ol(ndims, 2), uvwp(i)%b_bo(ndims, 2))
+            ALLOCATE(uvwp_old(i)%b(ndims, 2), uvwp_old(i)%b_bc(ndims, 2), uvwp_old(i)%b_ol(ndims, 2), uvwp_old(i)%b_bo(ndims, 2))
         END DO
 
         select_the_number_of_dimensions: SELECT CASE (ndims)
@@ -90,6 +95,7 @@ CONTAINS
 
                         ! bounds of the velocity array not considering boundaries nor overlap
                         uvwp(ic)%b(id,:) = [1 + KronDelta(id,ic)*log2int(idm(id) == MPI_PROC_NULL), N(id)]
+                        uvwp_old(ic)%b(id,:) = uvwp(ic)%b(id,:)
 
                         ! retrieve the number of diagonals of the B matrix for
                         ! interpolation and second derivative along the current
@@ -106,12 +112,12 @@ CONTAINS
                                   & - log2int(idm(id) == MPI_PROC_NULL) ! minus 1 if touches the minus border along the current direction
                         ! modify the lower bound of velocity array considering the overlap (regardless the possible non periodicity)
                         uvwp(ic)%b_ol(id,1) = uvwp(ic)%b(id,1) &
-                                  & - ld1*(1 - KronDelta(id,ic)) &! minus the number of lower diagonals from centers for the non-ic-th direction 
+                                  & - ld1*(1 - KronDelta(id,ic)) &! minus the number of lower diagonals from centers for the non-ic-th direction
                                   & - ld2*KronDelta(id,ic)        ! minus the number of lower diagonals from faces   for the     ic-th direction
                         ! modify the lower bound of velocity array considering the boundaries and the overlap
                         uvwp(ic)%b_bo(id,1) = uvwp(ic)%b(id,1) &
                                   & - log2int(idm(id) == MPI_PROC_NULL) & ! minus 1 if touches the minus border along the current direction
-                                  & - log2int(idm(id) /= MPI_PROC_NULL)*ld1*(1 - KronDelta(id,ic)) &! minus the number of lower diagonals from centers for the non-ic-th direction 
+                                  & - log2int(idm(id) /= MPI_PROC_NULL)*ld1*(1 - KronDelta(id,ic)) &! minus the number of lower diagonals from centers for the non-ic-th direction
                                   & - log2int(idm(id) /= MPI_PROC_NULL)*ld2*KronDelta(id,ic)        ! minus the number of lower diagonals from faces   for the     ic-th direction
 
                         ! modify the lower bound of velocity array considering the boundaries
@@ -133,6 +139,10 @@ CONTAINS
                     ALLOCATE(uvwp(ic)%values(uvwp(ic)%b_bo(1,1):uvwp(ic)%b_bo(1,2), &
                                            & uvwp(ic)%b_bo(2,1):uvwp(ic)%b_bo(2,2), &
                                            & uvwp(ic)%b_bo(3,1):uvwp(ic)%b_bo(3,2)))
+
+                    ALLOCATE(uvwp_old(ic)%values(uvwp_old(ic)%b(1,1):uvwp_old(ic)%b(1,2), &
+                                               & uvwp_old(ic)%b(2,1):uvwp_old(ic)%b(2,2), &
+                                               & uvwp_old(ic)%b(3,1):uvwp_old(ic)%b(3,2)))
 
                     ! shape of the velocity component array with ghost cells and boundaries
                     array_of_sizes = SHAPE(uvwp(ic)%values)

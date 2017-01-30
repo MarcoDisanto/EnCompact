@@ -42,8 +42,8 @@ CONTAINS
 
     SUBROUTINE set_grids
 
-        USE essentials
-        USE MPI_module, ONLY : myid, Ntot, ndims
+        USE essentials, ONLY : log2int => logical2integer, linspace
+        USE MPI_module, ONLY : myid, Ntot, ndims, periodic
 
         IMPLICIT NONE
 
@@ -65,62 +65,82 @@ CONTAINS
 
                 ALLOCATE(m3Dfc_tot%f(i)%g(Ntot(i)+1))
                 ALLOCATE(m3Dfc_tot%c(i)%g(Ntot(i)))
+                ! Uniform mesh from 0 to 1 (other spacings are based on this)
                 m3Dfc_tot%f(i)%g = linspace(0.0,1.0,Ntot(i)+1)
 
                 mesh_spacing: SELECT CASE (spacings(i))
 
-                    CASE (1) ! uniform (from 0 to L%matrix,schemes)
+                    CASE (1) ! uniform (from 0 to L)
                         m3Dfc_tot%f(i)%g = m3Dfc_tot%f(i)%g*L(i)
 
                     CASE (2) ! Chebyshev (from 0 to L)
                         m3Dfc_tot%f(i)%g = (1 + COS(pi*(1-m3Dfc_tot%f(i)%g)))*L(i)/2
 
                     CASE DEFAULT
+                        ! TODO: implement error control
                         PRINT *, 'ERROR in grid_mod.f90: no such spacing is coded'
 
                 END SELECT mesh_spacing
+
+                ! NOTE: in the periodic case the last face is equal to the first
+                ! one and should not be considered as an unknown; however the
+                ! following data is used to calculate the coefficients of the
+                ! schemes, thus it needs to be included in order to avoid strange
+                ! results due to out-of-bound.
 
                 ! The grid of the centers has to be built from the grid of the faces.
                 m3Dfc_tot%c(i)%g = (m3Dfc_tot%f(i)%g(1:Ntot(i)) + m3Dfc_tot%f(i)%g(2:Ntot(i)+1))/2
 
                 ! Grids of centers and faces are used to assemble the grids of
                 ! right- and left-hand side of the various compact schemes used.
-                ALLOCATE(all_grids(i,0,1,1)%g(2:Ntot(i)))
-                all_grids(i,0,1,1)%g = m3Dfc_tot%f(i)%g(2:Ntot(i))
-                ALLOCATE(all_grids(i,0,1,2)%g(0:Ntot(i)+1))
-                all_grids(i,0,1,2)%g = (/m3Dfc_tot%f(i)%g(1),&
-                                       & m3Dfc_tot%c(i)%g,&
-                                       & m3Dfc_tot%f(i)%g(Ntot(i)+1)/)
+                ALLOCATE(all_grids(i,0,1,1)%g((2 - log2int(periodic(i))):Ntot(i)))
+                all_grids(i,0,1,1)%g = m3Dfc_tot%f(i)%g((2 - log2int(periodic(i))):Ntot(i))
+                ALLOCATE(all_grids(i,0,1,2)%g(log2int(periodic(i)):(Ntot(i)+1-log2int(periodic(i)))))
+                IF (.NOT. periodic(i)) THEN
+                    all_grids(i,0,1,2)%g = [m3Dfc_tot%f(i)%g(1),&
+                                          & m3Dfc_tot%c(i)%g,&
+                                          & m3Dfc_tot%f(i)%g(Ntot(i)+1)]
+                ELSE
+                    all_grids(i,0,1,2)%g = m3Dfc_tot%c(i)%g
+                END IF
 
                 ALLOCATE(all_grids(i,0,2,1)%g(1:Ntot(i)))
                 all_grids(i,0,2,1)%g = m3Dfc_tot%c(i)%g
-                ALLOCATE(all_grids(i,0,2,2)%g(1:Ntot(i)+1))
-                all_grids(i,0,2,2)%g = m3Dfc_tot%f(i)%g
+                ALLOCATE(all_grids(i,0,2,2)%g(1:Ntot(i)+1-log2int(periodic(i))))
+                all_grids(i,0,2,2)%g = m3Dfc_tot%f(i)%g(1:Ntot(i)+1-log2int(periodic(i)))
 
                 ! incognite anche le facce di bordo, poi scartate (questo è ANOMALO [cerca questa parola nei file per individuare le dipendenze])
-                ALLOCATE(all_grids(i,1,1,1)%g(1:Ntot(i)+1))
-                all_grids(i,1,1,1)%g = m3Dfc_tot%f(i)%g
-                ALLOCATE(all_grids(i,1,1,2)%g(0:Ntot(i)+1))
-                all_grids(i,1,1,2)%g = (/m3Dfc_tot%f(i)%g(1),&
-                                       & m3Dfc_tot%c(i)%g,&
-                                       & m3Dfc_tot%f(i)%g(Ntot(i)+1)/)
+                ALLOCATE(all_grids(i,1,1,1)%g(1:Ntot(i)+1-log2int(periodic(i))))
+                all_grids(i,1,1,1)%g = m3Dfc_tot%f(i)%g(1:Ntot(i)+1-log2int(periodic(i)))
+                ALLOCATE(all_grids(i,1,1,2)%g(log2int(periodic(i)):Ntot(i)+1-log2int(periodic(i))))
+                IF (.NOT. periodic(i)) THEN
+                    all_grids(i,1,1,2)%g = [m3Dfc_tot%f(i)%g(1),&
+                                          & m3Dfc_tot%c(i)%g,&
+                                          & m3Dfc_tot%f(i)%g(Ntot(i)+1)]
+                ELSE
+                    all_grids(i,1,1,2)%g = m3Dfc_tot%c(i)%g
+                END IF
 
                 ALLOCATE(all_grids(i,1,2,1)%g(1:Ntot(i)))
                 all_grids(i,1,2,1)%g = m3Dfc_tot%c(i)%g
-                ALLOCATE(all_grids(i,1,2,2)%g(1:Ntot(i)+1))
-                all_grids(i,1,2,2)%g = m3Dfc_tot%f(i)%g
+                ALLOCATE(all_grids(i,1,2,2)%g(1:Ntot(i)+1-log2int(periodic(i))))
+                all_grids(i,1,2,2)%g = m3Dfc_tot%f(i)%g(1:Ntot(i)+1-log2int(periodic(i)))
 
                 ALLOCATE(all_grids(i,2,1,1)%g(1:Ntot(i)))
                 all_grids(i,2,1,1)%g = m3Dfc_tot%c(i)%g
-                ALLOCATE(all_grids(i,2,1,2)%g(0:Ntot(i)+1))
-                all_grids(i,2,1,2)%g = (/m3Dfc_tot%f(i)%g(1),&
-                                       & m3Dfc_tot%c(i)%g,&
-                                       & m3Dfc_tot%f(i)%g(Ntot(i)+1)/)
+                ALLOCATE(all_grids(i,2,1,2)%g(log2int(periodic(i)):Ntot(i)+1-log2int(periodic(i))))
+                IF (.NOT. periodic(i)) THEN
+                    all_grids(i,2,1,2)%g = [m3Dfc_tot%f(i)%g(1),&
+                                          & m3Dfc_tot%c(i)%g,&
+                                          & m3Dfc_tot%f(i)%g(Ntot(i)+1)]
+                ELSE
+                    all_grids(i,2,1,2)%g = m3Dfc_tot%c(i)%g
+                END IF
 
-                ALLOCATE(all_grids(i,2,2,1)%g(2:Ntot(i)))
-                all_grids(i,2,2,1)%g = m3Dfc_tot%f(i)%g(2:Ntot(i))
-                ALLOCATE(all_grids(i,2,2,2)%g(1:Ntot(i)+1))
-                all_grids(i,2,2,2)%g = m3Dfc_tot%f(i)%g
+                ALLOCATE(all_grids(i,2,2,1)%g(2-log2int(periodic(i)):Ntot(i)))
+                all_grids(i,2,2,1)%g = m3Dfc_tot%f(i)%g(2-log2int(periodic(i)):Ntot(i))
+                ALLOCATE(all_grids(i,2,2,2)%g(1:Ntot(i)+1-log2int(periodic(i))))
+                all_grids(i,2,2,2)%g = m3Dfc_tot%f(i)%g(1:Ntot(i)+1-log2int(periodic(i)))
 
             END DO for_each_dimension
 

@@ -1,7 +1,14 @@
 MODULE Thomas_suite
 
+
+    TYPE :: pointer_struct
+      PROCEDURE(pentdag), POINTER, NOPASS :: true_point => NULL()
+    END TYPE pointer_struct
+
+    TYPE(pointer_struct), DIMENSION(3) :: pent_point
+
     PRIVATE
-    PUBLIC :: Thomas, cypent, pentdag
+    PUBLIC :: Thomas, cypent, pentdag, pent_point
 
 CONTAINS
 
@@ -200,7 +207,7 @@ SUBROUTINE pentdag(a,b,c,d,e,f,u,n)
 END SUBROUTINE pentdag
 
 
-SUBROUTINE cypent(a,b,c,d,e,f,cp1,cp2,cp3,cp4,cp5,cp6,x,n)
+SUBROUTINE cypent(a,b,c,d,e,f,x,n)
       IMPLICIT NONE
       SAVE
 
@@ -234,7 +241,12 @@ SUBROUTINE cypent(a,b,c,d,e,f,cp1,cp2,cp3,cp4,cp5,cp6,x,n)
 ! popular formats
  !01   FORMAT(1x,1p7e10.2)
 
-
+cp1 = a(1)
+cp2 = b(1)
+cp3 = a(2)
+cp4 = e(n-1)
+cp5 = d(n)
+cp6 = e(n)
 
 ! initialize
       IF (n .LE. 2) STOP 'n < 2 in routine cypent'

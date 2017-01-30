@@ -57,21 +57,21 @@ CONTAINS
       uid = cmp(i, 1, 1)%B%uid
       ! Internal values
       velvel(1, i)%b = uvwp(i)%b
-      velvel(1, i)%b(i, 1) = velvel(1, i)%b(i, 1) - logical2integer(mycoords(i)==0)
+      velvel(1, i)%b(i, 1) = velvel(1, i)%b(i, 1) - logical2integer(idm(i) == MPI_PROC_NULL)
       ! Internal values + overlap (fictional overlaps included)
       velvel(1, i)%b_ol = velvel(1, i)%b
       velvel(1, i)%b_ol(i, 1) = velvel(1, i)%b_ol(i, 1) - lid
       velvel(1, i)%b_ol(i, 2) = velvel(1, i)%b_ol(i, 2) + uid
       ! Internal values + boundary
       velvel(1, i)%b_bc = velvel(1, i)%b
-      velvel(1, i)%b_bc(i, 1) = velvel(1, i)%b_bc(i, 1) - logical2integer(mycoords(i)==0)
-      velvel(1, i)%b_bc(i, 2) = velvel(1, i)%b_bc(i, 2) + logical2integer(mycoords(i)==dims(i)-1)
+      velvel(1, i)%b_bc(i, 1) = velvel(1, i)%b_bc(i, 1) - logical2integer(idm(i) == MPI_PROC_NULL)
+      velvel(1, i)%b_bc(i, 2) = velvel(1, i)%b_bc(i, 2) + logical2integer(idp(i) == MPI_PROC_NULL)
       ! Boundary and/or overlap
       velvel(1, i)%b_bo = velvel(1, i)%b
-      velvel(1, i)%b_bo(i, 1) = velvel(1, i)%b_bo(i, 1) - lid*(logical2integer(mycoords(i)/=0)) &
-                                                        - logical2integer(mycoords(i)==0)
-      velvel(1, i)%b_bo(i, 2) = velvel(1, i)%b_bo(i, 2) + uid*(logical2integer(mycoords(i)/=dims(i)-1)) &
-                                                        + logical2integer(mycoords(i)==dims(i)-1)
+      velvel(1, i)%b_bo(i, 1) = velvel(1, i)%b_bo(i, 1) - lid*(logical2integer(idm(i) /= MPI_PROC_NULL)) &
+                                                        - logical2integer(idm(i) == MPI_PROC_NULL)
+      velvel(1, i)%b_bo(i, 2) = velvel(1, i)%b_bo(i, 2) + uid*(logical2integer(idp(i) /= MPI_PROC_NULL)) &
+                                                        + logical2integer(idp(i) == MPI_PROC_NULL)
       ! Allocation
       ALLOCATE(velvel(1, i)%values(velvel(1, i)%b_bo(1, 1):velvel(1, i)%b_bo(1, 2), &
                                    velvel(1, i)%b_bo(2, 1):velvel(1, i)%b_bo(2, 2), &
@@ -88,7 +88,7 @@ CONTAINS
       uid = cmp(i, 1, 2)%B%uid
       ! Internal values
       velvel(2, i)%b = uvwp(i)%b
-      velvel(2, i)%b(j, 1) = velvel(2, i)%b(j, 1) + logical2integer(mycoords(j)==0)
+      velvel(2, i)%b(j, 1) = velvel(2, i)%b(j, 1) + logical2integer(idm(j) == MPI_PROC_NULL)
       velvel(2, i)%b(j, 2) = velvel(2, i)%b(j, 2)
       ! Internal values + overlap (fictional overlaps included)
       velvel(2, i)%b_ol = velvel(2, i)%b
@@ -98,20 +98,20 @@ CONTAINS
       velvel(2, i)%b_ol(j, 2) = velvel(2, i)%b_ol(j, 2) + uid
       ! Internal values + boundary
       velvel(2, i)%b_bc = velvel(2, i)%b
-      velvel(2, i)%b_bc(i, 1) = velvel(2, i)%b_bc(i, 1) - logical2integer(mycoords(i)==0)
-      velvel(2, i)%b_bc(i, 2) = velvel(2, i)%b_bc(i, 2) + logical2integer(mycoords(i)==dims(i)-1)
-      velvel(2, i)%b_bc(j, 1) = velvel(2, i)%b_bc(j, 1) - logical2integer(mycoords(j)==0)
-      velvel(2, i)%b_bc(j, 2) = velvel(2, i)%b_bc(j, 2) + logical2integer(mycoords(j)==dims(j)-1)
+      velvel(2, i)%b_bc(i, 1) = velvel(2, i)%b_bc(i, 1) - logical2integer(idm(i) == MPI_PROC_NULL)
+      velvel(2, i)%b_bc(i, 2) = velvel(2, i)%b_bc(i, 2) + logical2integer(idp(i) == MPI_PROC_NULL)
+      velvel(2, i)%b_bc(j, 1) = velvel(2, i)%b_bc(j, 1) - logical2integer(idm(j) == MPI_PROC_NULL)
+      velvel(2, i)%b_bc(j, 2) = velvel(2, i)%b_bc(j, 2) + logical2integer(idp(j) == MPI_PROC_NULL)
       ! Boundary and/or overlap
       velvel(2, i)%b_bo = velvel(2, i)%b
-      velvel(2, i)%b_bo(i, 1) = velvel(2, i)%b_bo(i, 1) - lid*(logical2integer(mycoords(i)/=0)) &
-                                                        - logical2integer(mycoords(i)==0)
-      velvel(2, i)%b_bo(i, 2) = velvel(2, i)%b_bo(i, 2) + uid*(logical2integer(mycoords(i)/=dims(i)-1)) &
-                                                        + logical2integer(mycoords(i)==dims(i)-1)
-      velvel(2, i)%b_bo(j, 1) = velvel(2, i)%b_bo(j, 1) - lid*(logical2integer(mycoords(j)/=0)) &
-                                                        - logical2integer(mycoords(j)==0)
-      velvel(2, i)%b_bo(j, 2) = velvel(2, i)%b_bo(j, 2) + uid*(logical2integer(mycoords(j)/=dims(j)-1)) &
-                                                        + logical2integer(mycoords(j)==dims(j)-1)
+      velvel(2, i)%b_bo(i, 1) = velvel(2, i)%b_bo(i, 1) - lid*(logical2integer(idm(i) /= MPI_PROC_NULL)) &
+                                                        - logical2integer(idm(i) == MPI_PROC_NULL)
+      velvel(2, i)%b_bo(i, 2) = velvel(2, i)%b_bo(i, 2) + uid*(logical2integer(idp(i) /= MPI_PROC_NULL)) &
+                                                        + logical2integer(idp(i) == MPI_PROC_NULL)
+      velvel(2, i)%b_bo(j, 1) = velvel(2, i)%b_bo(j, 1) - lid*(logical2integer(idm(j) /= MPI_PROC_NULL)) &
+                                                        - logical2integer(idm(j) == MPI_PROC_NULL)
+      velvel(2, i)%b_bo(j, 2) = velvel(2, i)%b_bo(j, 2) + uid*(logical2integer(idp(j) /= MPI_PROC_NULL)) &
+                                                        + logical2integer(idp(j) == MPI_PROC_NULL)
 
       ! Allocation
       ALLOCATE(velvel(2, i)%values(velvel(2, i)%b_bo(1, 1):velvel(2, i)%b_bo(1, 2), &
@@ -231,6 +231,7 @@ CONTAINS
   SUBROUTINE conv_interp
     ! Subroutine that interpolates and multiply velocities to put into velvel block
     USE SPIKE
+    USE MPI, ONLY: MPI_PROC_NULL
     USE essentials
     USE bandedmatrix
     USE Thomas_suite
@@ -287,7 +288,7 @@ CONTAINS
       DEALLOCATE(q)
       CALL SPIKE_solve2(id, ider, istag, velvel(1, id)%values(velvel(1, id)%b(id, 1) : velvel(1, id)%b(id, 2), :, :))
       ! need to add boundary values
-      IF (mycoords(id)==0) THEN
+      IF (idm(id) == MPI_PROC_NULL) THEN
         velvel(1, id)%values(velvel(1, id)%b_bo(1, 1), &
                              velvel(1, id)%b(2, 1):velvel(1, id)%b(2, 2), &
                              velvel(1, id)%b(3, 1):velvel(1, id)%b(3, 2)) = &
@@ -295,7 +296,7 @@ CONTAINS
                         velvel(1, id)%b(2, 1):velvel(1, id)%b(2, 2), &
                         velvel(1, id)%b(3, 1):velvel(1, id)%b(3, 2))
       END IF
-      IF (mycoords(id)==dims(id)-1) THEN
+      IF (idp(id) == MPI_PROC_NULL) THEN
         velvel(1, id)%values(velvel(1, id)%b_bo(1, 2), &
                              velvel(1, id)%b(2, 1):velvel(1, id)%b(2, 2), &
                              velvel(1, id)%b(3, 1):velvel(1, id)%b(3, 2)) = &
@@ -324,7 +325,7 @@ CONTAINS
                                                            intvel(id)%b(2, 1)  : intvel(id)%b(2, 2), &
                                                            intvel(id)%b(3, 1)  : intvel(id)%b(3, 2)))
       ! need to add boundary values
-      IF (mycoords(id)==0) THEN
+      IF (idm(id) == MPI_PROC_NULL) THEN
         intvel(id)%values(intvel(id)%b_bo(1, 1), &
                           intvel(id)%b(2, 1):intvel(id)%b(2, 2), &
                           intvel(id)%b(3, 1):intvel(id)%b(3, 2)) = &
@@ -332,7 +333,7 @@ CONTAINS
                         intvel(id)%b(2, 1):intvel(id)%b(2, 2), &
                         intvel(id)%b(3, 1):intvel(id)%b(3, 2))
       END IF
-      IF (mycoords(id)==dims(id)-1) THEN
+      IF (idp(id) == MPI_PROC_NULL) THEN
         intvel(id)%values(intvel(id)%b_bo(1, 2), &
                           intvel(id)%b(2, 1):intvel(id)%b(2, 2), &
                           intvel(id)%b(3, 1):intvel(id)%b(3, 2)) = &
@@ -361,7 +362,7 @@ CONTAINS
                                                               velvel(2, ic)%b(2, 1)  : velvel(2, ic)%b(2, 2), &
                                                               velvel(2, ic)%b(3, 1)  : velvel(2, ic)%b(3, 2)))
       ! need to add boundary values
-      IF (mycoords(id)==0) THEN
+      IF (idm(id) == MPI_PROC_NULL) THEN
         velvel(2, ic)%values(velvel(2, ic)%b_bo(1, 1), &
                           velvel(2, ic)%b(2, 1):velvel(2, ic)%b(2, 2), &
                           velvel(2, ic)%b(3, 1):velvel(2, ic)%b(3, 2)) = &
@@ -369,7 +370,7 @@ CONTAINS
                         velvel(2, ic)%b(2, 1):velvel(2, ic)%b(2, 2), &
                         velvel(2, ic)%b(3, 1):velvel(2, ic)%b(3, 2))
       END IF
-      IF (mycoords(id)==dims(id)-1) THEN
+      IF (idp(id) == MPI_PROC_NULL) THEN
         velvel(2, ic)%values(velvel(2, ic)%b_bo(1, 2), &
                           velvel(2, ic)%b(2, 1):velvel(2, ic)%b(2, 2), &
                           velvel(2, ic)%b(3, 1):velvel(2, ic)%b(3, 2)) = &
@@ -401,7 +402,7 @@ CONTAINS
       DEALLOCATE(q)
       CALL SPIKE_solve2(id, ider, istag, velvel(1, id)%values(:, velvel(1, id)%b(id, 1) : velvel(1, id)%b(id, 2), :))
       ! need to add boundary values
-      IF (mycoords(id)==0) THEN
+      IF (idm(id) == MPI_PROC_NULL) THEN
         velvel(1, id)%values(velvel(1, id)%b(1, 1):velvel(1, id)%b(1, 2), &
                              velvel(1, id)%b_bo(2, 1), &
                              velvel(1, id)%b(3, 1):velvel(1, id)%b(3, 2)) = &
@@ -409,7 +410,7 @@ CONTAINS
                         uvwp(ic)%b_bo(2, 1), &
                         velvel(1, id)%b(3, 1):velvel(1, id)%b(3, 2))
       END IF
-      IF (mycoords(id)==dims(id)-1) THEN
+      IF (idp(id) == MPI_PROC_NULL) THEN
         velvel(1, id)%values(velvel(1, id)%b(1, 1):velvel(1, id)%b(1, 2), &
                              velvel(1, id)%b_bo(2, 2), &
                              velvel(1, id)%b(3, 1):velvel(1, id)%b(3, 2)) = &
@@ -438,7 +439,7 @@ CONTAINS
                                                            intvel(id)%b(id, 1) : intvel(id)%b(id, 2), &
                                                            intvel(id)%b(3, 1)  : intvel(id)%b(3, 2)))
       ! need to add boundary values
-      IF (mycoords(id)==0) THEN
+      IF (idm(id) == MPI_PROC_NULL) THEN
         intvel(id)%values(intvel(id)%b(1, 1):intvel(id)%b(1, 2), &
                              intvel(id)%b_bo(2, 1), &
                              intvel(id)%b(3, 1):intvel(id)%b(3, 2)) = &
@@ -446,7 +447,7 @@ CONTAINS
                         uvwp(ic)%b_bo(2, 1), &
                         intvel(id)%b(3, 1):intvel(id)%b(3, 2))
       END IF
-      IF (mycoords(id)==dims(id)-1) THEN
+      IF (idp(id) == MPI_PROC_NULL) THEN
         intvel(id)%values(intvel(id)%b(1, 1):intvel(id)%b(1, 2), &
                              intvel(id)%b_bo(2, 2), &
                              intvel(id)%b(3, 1):intvel(id)%b(3, 2)) = &
@@ -475,7 +476,7 @@ CONTAINS
                                                               velvel(2, ic)%b(id, 1) : velvel(2, ic)%b(id, 2), &
                                                               velvel(2, ic)%b(3, 1)  : velvel(2, ic)%b(3, 2)))
       ! need to add boundary values
-      IF (mycoords(id)==0) THEN
+      IF (idm(id) == MPI_PROC_NULL) THEN
         velvel(2, ic)%values(velvel(2, ic)%b(1, 1):velvel(2, ic)%b(1, 2), &
                              velvel(2, ic)%b_bo(2, 1), &
                              velvel(2, ic)%b(3, 1):velvel(2, ic)%b(3, 2)) = &
@@ -483,7 +484,7 @@ CONTAINS
                         uvwp(ic)%b_bo(2, 1), &
                         velvel(2, ic)%b(3, 1):velvel(2, ic)%b(3, 2))
       END IF
-      IF (mycoords(id)==dims(id)-1) THEN
+      IF (idp(id) == MPI_PROC_NULL) THEN
         velvel(2, ic)%values(velvel(2, ic)%b(1, 1):velvel(2, ic)%b(1, 2), &
                              velvel(2, ic)%b_bo(2, 2), &
                              velvel(2, ic)%b(3, 1):velvel(2, ic)%b(3, 2)) = &
@@ -515,7 +516,7 @@ CONTAINS
       DEALLOCATE(q)
       CALL SPIKE_solve2(id, ider, istag, velvel(1, id)%values(:, :, velvel(1, id)%b(id, 1) : velvel(1, id)%b(id, 2)))
       ! need to add boundary values
-      IF (mycoords(id)==0) THEN
+      IF (idm(id) == MPI_PROC_NULL) THEN
         velvel(1, id)%values(velvel(1, id)%b(1, 1):velvel(1, id)%b(1, 2), &
                              velvel(1, id)%b(2, 1):velvel(1, id)%b(2, 2), &
                              velvel(1, id)%b_bo(3, 1)) = &
@@ -523,7 +524,7 @@ CONTAINS
                         velvel(1, id)%b(2, 1):velvel(1, id)%b(2, 2), &
                         uvwp(ic)%b_bo(3, 1))
       END IF
-      IF (mycoords(id)==dims(id)-1) THEN
+      IF (idp(id) == MPI_PROC_NULL) THEN
         velvel(1, id)%values(velvel(1, id)%b(1, 1):velvel(1, id)%b(1, 2), &
                              velvel(1, id)%b(2, 1):velvel(1, id)%b(2, 2), &
                              velvel(1, id)%b_bo(3, 2)) = &
@@ -551,7 +552,7 @@ CONTAINS
                                                            intvel(id)%b(2, 1)  : intvel(id)%b(2, 2), &
                                                            intvel(id)%b(id, 1) : intvel(id)%b(id, 2)))
       ! need to add boundary values
-      IF (mycoords(id)==0) THEN
+      IF (idm(id) == MPI_PROC_NULL) THEN
         intvel(id)%values(intvel(id)%b(1, 1):intvel(id)%b(1, 2), &
                              intvel(id)%b(2, 1):intvel(id)%b(2, 2), &
                              intvel(id)%b_bo(3, 1)) = &
@@ -559,7 +560,7 @@ CONTAINS
                         intvel(id)%b(2, 1):intvel(id)%b(2, 2), &
                         uvwp(ic)%b_bo(3, 1))
       END IF
-      IF (mycoords(id)==dims(id)-1) THEN
+      IF (idp(id) == MPI_PROC_NULL) THEN
         intvel(id)%values(intvel(id)%b(1, 1):intvel(id)%b(1, 2), &
                              intvel(id)%b(2, 1):intvel(id)%b(2, 2), &
                              intvel(id)%b_bo(3, 2)) = &
@@ -588,7 +589,7 @@ CONTAINS
                                                               velvel(2, ic)%b(2, 1) : velvel(2, ic)%b(2, 2), &
                                                               velvel(2, ic)%b(id, 1) : velvel(2, ic)%b(id, 2)))
       ! need to add boundary values
-      IF (mycoords(id)==0) THEN
+      IF (idm(id) == MPI_PROC_NULL) THEN
         velvel(2, ic)%values(velvel(2, ic)%b(1, 1):velvel(2, ic)%b(1, 2), &
                              velvel(2, ic)%b(2, 1):velvel(2, ic)%b(2, 2), &
                              velvel(2, ic)%b_bo(3, 1)) = &
@@ -596,7 +597,7 @@ CONTAINS
                         velvel(2, ic)%b(2, 1):velvel(2, ic)%b(2, 2), &
                         uvwp(ic)%b_bo(3, 1))
       END IF
-      IF (mycoords(id)==dims(id)-1) THEN
+      IF (idp(id) == MPI_PROC_NULL) THEN
         velvel(2, ic)%values(velvel(2, ic)%b(1, 1):velvel(2, ic)%b(1, 2), &
                              velvel(2, ic)%b(2, 1):velvel(2, ic)%b(2, 2), &
                              velvel(2, ic)%b_bo(3, 2)) = &

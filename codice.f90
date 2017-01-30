@@ -16,6 +16,7 @@ USE convective_term
 USE bandedmatrix
 USE time_advancement
 USE output
+USE Thomas_suite
 USE, INTRINSIC :: IEEE_ARITHMETIC ! to use IEEE routines
 
 
@@ -30,7 +31,7 @@ INTEGER :: i, j, k, iii
 REAL, DIMENSION(:), ALLOCATABLE :: q, psi
 REAL, DIMENSION(:), ALLOCATABLE :: coeffs
 INTEGER, POINTER :: lid, uid
-REAL :: dt, ni
+REAL :: dt, ni, vel_tol
 INTEGER :: sz, prova, nun
 INTEGER(MPI_ADDRESS_KIND) :: i1, i2, diff
 INTEGER :: ext1, ext2
@@ -90,13 +91,23 @@ IF(myid==0)THEN
     Do i=1,ndims
 
         ALLOCATE(pres_schemes(i,1)%sch(-1:1), pres_schemes(i,2)%sch(-1:1))
-        pres_schemes(i,1)%sch(-1)='zero'
-        pres_schemes(i,1)%sch( 0)='D1_c2f_2E_C'
-        pres_schemes(i,1)%sch(+1)='zero'
+        !IF (periodic(i)) THEN
+        !   pres_schemes(i,1)%sch(-1)='periodic'
+        !   pres_schemes(i,1)%sch( 0)='D1_c2f_2E_C'
+        !   pres_schemes(i,1)%sch(+1)='periodic'
 
-        pres_schemes(i,2)%sch(-1)='D1_f2c_2E_C'
-        pres_schemes(i,2)%sch( 0)='D1_f2c_2E_C'
-        pres_schemes(i,2)%sch(+1)='D1_f2c_2E_C'
+        !   pres_schemes(i,2)%sch(-1)='D1_f2c_2E_C'
+        !   pres_schemes(i,2)%sch( 0)='D1_f2c_2E_C'
+        !   pres_schemes(i,2)%sch(+1)='D1_f2c_2E_C'
+        !ELSE
+           pres_schemes(i,1)%sch(-1)='zero'
+           pres_schemes(i,1)%sch( 0)='D1_c2f_2E_C'
+           pres_schemes(i,1)%sch(+1)='zero'
+
+           pres_schemes(i,2)%sch(-1)='D1_f2c_2E_C'
+           pres_schemes(i,2)%sch( 0)='D1_f2c_2E_C'
+           pres_schemes(i,2)%sch(+1)='D1_f2c_2E_C'
+        !END IF
 
         !ALLOCATE(pres_schemes(i,1)%sch(-3:3),pres_schemes(i,2)%sch(-2:2))
         !pres_schemes(i,1)%sch(-3)='D1_c2f_2E_L'
@@ -148,23 +159,109 @@ CALL set_grad_p
 ALLOCATE(b(indv(1,1):indv(1,2),indv(2,1):indv(2,2),indv(3,1):indv(3,2)))
 ! Questo termine deve essere in realtà la divergenza del campo *
 
+! Decide whether to use pentdag or cypent - basically a periodic pentdag - depending
+! on the values of variable "periodic"
+DO id = 1, ndims
+
+  IF (periodic(id)) THEN
+    pent_point(id)%true_point => cypent
+  ELSE
+    pent_point(id)%true_point => pentdag
+  END IF
+
+END DO
+
+IF (myid==0) PRINT *, 'n° of processes'
+IF (myid==0) PRINT *, dims
+
 ! TODO: inserire dt e ni nel file di input e modificare il modulo di lettura in
 ! maniera opportuna
-dt = 1e-3
-ni = 1e-1
+dt = 2.5e-3
+ni = 1e-2
+vel_tol = 1e-4
 
-DO i = 1, 10
-  IF (myid==iii) PRINT *, i
+
+IF (myid==0) PRINT *, ''
+IF (myid==0) PRINT *, ''
+IF (myid==0) PRINT *, ''
+IF (myid==0) PRINT *, 'Start calculating'
+
+! Time advancement
+i = 0
+vel_res = 1
+t_start = MPI_Wtime()
+DO WHILE (vel_res>vel_tol .AND. i<10000)
+
+  i = i+1
+
+  ! saving old values of flow variables
+  DO j = 1, n_flow_variables-1
+    uvwp_old(j)%values = uvwp(j)%values(uvwp(j)%b(1, 1) : uvwp(j)%b(1, 2), &
+                                        uvwp(j)%b(2, 1) : uvwp(j)%b(2, 2), &
+                                        uvwp(j)%b(3, 1) : uvwp(j)%b(3, 2))
+  END DO
+
+  ! upgrading solution
   CALL ExplEuler(dt, ni)
+
+  CALL residual_eval
+
+  IF (myid==0) PRINT *, i, '     Residual = ', vel_res
+
 END DO
+t_end = MPI_Wtime()
 CALL SPIKE_exchange_uvw
 CALL divergence_calc
 
+! Calculating execution time
+t_exec_proc = t_end-t_start
+CALL MPI_REDUCE(t_exec_proc, t_exec, 1, MPI_DOUBLE_PRECISION, MPI_MAX, 0, MPI_COMM_WORLD, ierr)
 
+! Output
 CALL set_output
 CALL raw_out
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+id = 1
+istag = 2
+
+iii = 0
+i = 1
+
+
+!PRINT *, 'Process', myid, '     Velocity difference =', vel_diff_proc
+
+
+IF (myid==0) PRINT *, ''
+IF (myid==0) PRINT *, ''
+IF (myid==0) PRINT *, ''
+IF (myid==0) PRINT *, 'Elapsed time =', t_exec
+!IF (myid==iii) CALL printmatrix(uvwp(i)%values)
+
+!IF (myid==iii) print *, 'grad'
+!IF (myid==iii) CALL printmatrix(GraDiv(i, 1)%matrix)
+!IF (myid==iii) print *, 'div'
+!IF (myid==iii) CALL printmatrix(GraDiv(i, 2)%matrix)
+!IF (myid==iii) print *, 'lapl'
+!IF (myid==iii) CALL printmatrix(Lapl(i)%matrix)
+
+
+!IF (myid==iii) PRINT *, uvwp(i)%b
+!IF (myid==iii) PRINT *, uvwp(i)%b_ol
+!IF (myid==iii) PRINT *, ''
+!
+!IF (myid==iii) PRINT *, 'A'
+!IF (myid==iii) PRINT *, cmp(id, 2, istag)%A%lb
+!IF (myid==iii) PRINT *, cmp(id, 2, istag)%A%ub
+!IF (myid==iii) CALL printmatrix(cmp(id, 2, istag)%A%matrix)
+!IF (myid==iii) PRINT *, ''
+!
+!IF (myid==iii) PRINT *, 'B'
+!IF (myid==iii) PRINT *, cmp(id, 2, istag)%B%lb
+!IF (myid==iii) PRINT *, cmp(id, 2, istag)%B%ub
+!IF (myid==iii) CALL printmatrix(cmp(id, 2, istag)%B%matrix)
+!IF (myid==iii) PRINT *, ''
+
 
 
 ! print MPI library version

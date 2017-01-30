@@ -281,6 +281,8 @@ SUBROUTINE SPIKE_solve(id, ider, istag, psi, q)
 ! This subroutine solves the tridiagonal system necessary to retrieve the derivatives
 ! It finds the necessary matrices by itself, accessing compact_mod by means of id, ider
 ! and istag.
+! NOTE: modifications needed to deal with periodicity not included, for this is
+! an obsolete subroutine
 
 USE compact, ONLY: compact_type, cmp
 USE essentials ! dopo cancella
@@ -485,9 +487,20 @@ SELECT CASE(id)
       !!!!!!!!!! 5-diag system resolution !!!!!!!!!!
       DO j = 1, SIZE(PSI0C, 2)
         DO k = 1, SIZE(PSI0C, 3)
-          ! must exclude first and last equations and unknowns to avoid generating more NaNs
-          CALL pentdag(Cp(:, 1), Cp(:, 2), Cp(:, 3), Cp(:, 4), Cp(:, 5), &
-                       PSI0C(2:SIZE(PSI0C, id)-1, j, k), PSIC(2:SIZE(PSIC, id)-1, j, k), SIZE(PSIC, id)-2)
+
+          ! must exclude first and last equations and unknowns to avoid generating
+          ! more NaNs, but ONLY in the non-periodic case
+          ! TODO: crea una nuova variabile simile a periodic, ma di tipo INTEGER,
+          !  così si evitano tutte queste chiamate a logical2integer()
+          CALL pent_point(id)%true_point(Cp(:, 1), Cp(:, 2), Cp(:, 3), Cp(:, 4), Cp(:, 5), &                                        ! a, b, c, d, e (diagonals)
+                                         PSI0C(2-logical2integer(periodic(id)) : SIZE(PSI0C, id)-1+logical2integer(periodic(id)), & ! f (RHS)
+                                               j,  &
+                                               k), &
+                                         PSIC(2-logical2integer(periodic(id)) : SIZE(PSIC, id)-1+logical2integer(periodic(id)), &   ! u (unknown)
+                                              j,  &
+                                              k), &
+                                         SIZE(PSIC, id)-2*logical2integer(.NOT.periodic(id)))                                       ! n (lenght)
+
         END DO
       END DO
 
@@ -499,16 +512,21 @@ SELECT CASE(id)
         PSIC(i, :, :) = PSIC(i+1, :, :)
         PSIC(i+1, :, :) = dum
       END DO
+      ! need to swap first and last elements as well; this procedure is not relevant
+      ! in the non-periodic case
+      dum = PSIC(1, :, :)
+      PSIC(1, :, :) = PSIC(SIZE(PSIC, id), :, :)
+      PSIC(SIZE(PSIC, id), :, :) = dum
 
     END IF master_only
 
     !!!!!!!!!!! Master process distributes required data !!!!!!!!!!
     CALL MPI_SCATTER(PSIC, 2, MPI_gather_type_res, &    ! sender side
-    PSIC, 2, MPI_gather_type_res, &    ! receiver side
-    0, pencil_comm(id), ierr)
+                     PSIC, 2, MPI_gather_type_res, &    ! receiver side
+                     0, pencil_comm(id), ierr)
 
     !!!!!!!!!! Update solution !!!!!!!!!!
-    IF (mycoords(id)==0) THEN
+    IF (idm(id) == MPI_PROC_NULL) THEN
       ! add only right value
       DO j = 1, SIZE(PSI, 2)
         DO k = 1, SIZE(PSI, 3)
@@ -516,7 +534,7 @@ SELECT CASE(id)
         END DO
       END DO
 
-    ELSE IF (mycoords(id)==dims(id)-1) THEN
+    ELSE IF (idp(id) == MPI_PROC_NULL) THEN
       ! add only left value
       DO j = 1, SIZE(PSI, 2)
         DO k = 1, SIZE(PSI, 3)
@@ -543,8 +561,21 @@ SELECT CASE(id)
       DO j = 1, SIZE(PSI0C, 1)
         DO k = 1, SIZE(PSI0C, 3)
           ! must exclude first and last equations and unknowns to avoid generating more NaNs
-          CALL pentdag(Cp(:, 1), Cp(:, 2), Cp(:, 3), Cp(:, 4), Cp(:, 5), &
-                       PSI0C(j, 2:SIZE(PSI0C, id)-1, k), PSIC(j, 2:SIZE(PSIC, id)-1, k), SIZE(PSIC, id)-2)
+          !CALL pent_point(id)%true_point(Cp(:, 1), Cp(:, 2), Cp(:, 3), Cp(:, 4), Cp(:, 5), &
+          !             PSI0C(j, 2:SIZE(PSI0C, id)-1, k), PSIC(j, 2:SIZE(PSIC, id)-1, k), SIZE(PSIC, id)-2)
+          ! must exclude first and last equations and unknowns to avoid generating
+          ! more NaNs, but ONLY in the non-periodic case
+          ! TODO: crea una nuova variabile simile a periodic, ma di tipo INTEGER,
+          !  così si evitano tutte queste chiamate a logical2integer()
+          CALL pent_point(id)%true_point(Cp(:, 1), Cp(:, 2), Cp(:, 3), Cp(:, 4), Cp(:, 5), &                                        ! a, b, c, d, e (diagonals)
+                                         PSI0C(j,  &                                                                                ! f (RHS)
+                                               2-logical2integer(periodic(id)) : SIZE(PSI0C, id)-1+logical2integer(periodic(id)),  &
+                                               k), &
+                                         PSIC(j,  &                                                                                 ! u (unknown)
+                                              2-logical2integer(periodic(id)) : SIZE(PSIC, id)-1+logical2integer(periodic(id)),  &
+                                              k), &
+                                         SIZE(PSIC, id)-2*logical2integer(.NOT.periodic(id)))                                       ! n (length)
+
         END DO
       END DO
 
@@ -556,6 +587,11 @@ SELECT CASE(id)
         PSIC(:, i, :) = PSIC(:, i+1, :)
         PSIC(:, i+1, :) = dum
       END DO
+      ! need to swap first and last elements as well; this procedure is not relevant
+      ! in the non-periodic case
+      dum = PSIC(:, 1, :)
+      PSIC(:, 1, :) = PSIC(:, SIZE(PSIC, id), :)
+      PSIC(:, SIZE(PSIC, id), :) = dum
 
     END IF master_only2
 
@@ -565,7 +601,7 @@ SELECT CASE(id)
                      0, pencil_comm(id), ierr)
 
     !!!!!!!!!! Update solution !!!!!!!!!!
-    IF (mycoords(id)==0) THEN
+    IF (idm(id) == MPI_PROC_NULL) THEN
       ! add only right value
       DO j = 1, SIZE(PSI, 1)
         DO k = 1, SIZE(PSI, 3)
@@ -573,7 +609,7 @@ SELECT CASE(id)
         END DO
       END DO
 
-    ELSE IF (mycoords(id)==dims(id)-1) THEN
+    ELSE IF (idp(id) == MPI_PROC_NULL) THEN
       ! add only left value
       DO j = 1, SIZE(PSI, 1)
         DO k = 1, SIZE(PSI, 3)
@@ -600,8 +636,14 @@ SELECT CASE(id)
       DO j = 1, SIZE(PSI0C, 1)
         DO k = 1, SIZE(PSI0C, 2)
           ! must exclude first and last equations and unknowns to avoid generating more NaNs
-          CALL pentdag(Cp(:, 1), Cp(:, 2), Cp(:, 3), Cp(:, 4), Cp(:, 5), &
-                       PSI0C(j, k, 2:SIZE(PSI0C, id)-1), PSIC(j, k, 2:SIZE(PSIC, id)-1), SIZE(PSIC, id)-2)
+          CALL pent_point(id)%true_point(Cp(:, 1), Cp(:, 2), Cp(:, 3), Cp(:, 4), Cp(:, 5), &
+                                         PSI0C(j, &
+                                               k, &
+                                               2-logical2integer(periodic(id)) : SIZE(PSI0C, id)-1+logical2integer(periodic(id))), &
+                                         PSIC(j, &
+                                              k, &
+                                              2-logical2integer(periodic(id)) : SIZE(PSIC, id)-1+logical2integer(periodic(id))), &
+                                              SIZE(PSIC, id)-2*logical2integer(.NOT.periodic(id)))
         END DO
       END DO
 
@@ -613,6 +655,11 @@ SELECT CASE(id)
         PSIC(:, :, i) = PSIC(:, :, i+1)
         PSIC(:, :, i+1) = dum
       END DO
+      ! need to swap first and last elements as well; this procedure is not relevant
+      ! in the non-periodic case
+      dum = PSIC(:, :, 1)
+      PSIC(:, :, 1) = PSIC(:, :, SIZE(PSIC, id))
+      PSIC(:, :, SIZE(PSIC, id)) = dum
 
     END IF master_only3
 
@@ -622,7 +669,7 @@ SELECT CASE(id)
                      0, pencil_comm(id), ierr)
 
     !!!!!!!!!! Update solution !!!!!!!!!!
-    IF (mycoords(id)==0) THEN
+    IF (idm(id) == MPI_PROC_NULL) THEN
       ! add only right value
       DO j = 1, SIZE(PSI, 1)
         DO k = 1, SIZE(PSI, 2)
@@ -630,7 +677,7 @@ SELECT CASE(id)
         END DO
       END DO
 
-    ELSE IF (mycoords(id)==dims(id)-1) THEN
+    ELSE IF (idp(id) == MPI_PROC_NULL) THEN
       ! add only left value
       DO j = 1, SIZE(PSI, 1)
         DO k = 1, SIZE(PSI, 2)
