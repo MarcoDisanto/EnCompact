@@ -117,7 +117,7 @@ CONTAINS
 
 
 
-  SUBROUTINE raw_out
+  SUBROUTINE raw_out(index)
     ! This subroutine writes a file of raw data by means of MPI-I/O tools. Being
     ! written in binary, it requires additional info to be of any use.
 
@@ -126,12 +126,15 @@ CONTAINS
     INTEGER :: ierr, i
     INTEGER, DIMENSION(MPI_STATUS_SIZE) :: status
     INTEGER :: file
+    INTEGER, INTENT(IN) :: index
+    CHARACTER(LEN=1024) :: varind  ! name of the output file (name+index)
 
     !TODO: dare in output un unico file, accedendo così una sola volta all'hard disk
 
     !!!!!!!!!! u !!!!!!!!!!
+    WRITE (varind, '(A14,I0)') 'outputfolder/u', index
     i = 1
-    CALL MPI_FILE_OPEN(MPI_COMM_WORLD, 'u', MPI_MODE_WRONLY + MPI_MODE_CREATE, MPI_INFO_NULL, file, ierr)
+    CALL MPI_FILE_OPEN(MPI_COMM_WORLD, trim(varind), MPI_MODE_WRONLY + MPI_MODE_CREATE, MPI_INFO_NULL, file, ierr)
     CALL MPI_FILE_SEEK(file, displ(i, myid), MPI_SEEK_SET, ierr)
     CALL MPI_FILE_WRITE(file, uvwp(i)%values(uvwp(i)%b_bc(1, 1),  &
                                              uvwp(i)%b_bc(2, 1),  &
@@ -140,8 +143,9 @@ CONTAINS
     CALL MPI_FILE_CLOSE(file, ierr)
 
     !!!!!!!!!! v !!!!!!!!!!
+    WRITE (varind, '(A14,I0)') 'outputfolder/v', index
     i = 2
-    CALL MPI_FILE_OPEN(MPI_COMM_WORLD, 'v', MPI_MODE_WRONLY + MPI_MODE_CREATE, MPI_INFO_NULL, file, ierr)
+    CALL MPI_FILE_OPEN(MPI_COMM_WORLD, trim(varind), MPI_MODE_WRONLY + MPI_MODE_CREATE, MPI_INFO_NULL, file, ierr)
     CALL MPI_FILE_SEEK(file, displ(i, myid), MPI_SEEK_SET, ierr)
     CALL MPI_FILE_WRITE(file, uvwp(i)%values(uvwp(i)%b_bc(1, 1),  &
                                              uvwp(i)%b_bc(2, 1),  &
@@ -150,8 +154,9 @@ CONTAINS
     CALL MPI_FILE_CLOSE(file, ierr)
 
     !!!!!!!!!! w !!!!!!!!!!
+    WRITE (varind, '(A14,I0)') 'outputfolder/w', index
     i = 3
-    CALL MPI_FILE_OPEN(MPI_COMM_WORLD, 'w', MPI_MODE_WRONLY + MPI_MODE_CREATE, MPI_INFO_NULL, file, ierr)
+    CALL MPI_FILE_OPEN(MPI_COMM_WORLD, trim(varind), MPI_MODE_WRONLY + MPI_MODE_CREATE, MPI_INFO_NULL, file, ierr)
     CALL MPI_FILE_SEEK(file, displ(i, myid), MPI_SEEK_SET, ierr)
     CALL MPI_FILE_WRITE(file, uvwp(i)%values(uvwp(i)%b_bc(1, 1),  &
                                              uvwp(i)%b_bc(2, 1),  &
@@ -160,15 +165,13 @@ CONTAINS
     CALL MPI_FILE_CLOSE(file, ierr)
 
     !!!!!!!!!! p !!!!!!!!!!
+    WRITE (varind, '(A14,I0)') 'outputfolder/p', index
     i = 4
-    CALL MPI_FILE_OPEN(MPI_COMM_WORLD, 'p', MPI_MODE_WRONLY + MPI_MODE_CREATE, MPI_INFO_NULL, file, ierr)
+    CALL MPI_FILE_OPEN(MPI_COMM_WORLD, trim(varind), MPI_MODE_WRONLY + MPI_MODE_CREATE, MPI_INFO_NULL, file, ierr)
     CALL MPI_FILE_SEEK(file, displ(i, myid), MPI_SEEK_SET, ierr)
     !CALL MPI_FILE_WRITE(file, uvwp(i)%values, 1, MPI_block_type(i), status, ierr)
     CALL MPI_FILE_WRITE(file, p, 1, MPI_block_type(i), status, ierr)
     CALL MPI_FILE_CLOSE(file, ierr)
-
-
-    CALL output_read_aid
 
 
   END SUBROUTINE raw_out
@@ -187,7 +190,7 @@ CONTAINS
 
     IF (myid==0) THEN
 
-      OPEN(UNIT=dev, FILE='outputaid.txt', STATUS='REPLACE', ACTION='WRITE', IOSTAT=iostat)
+      OPEN(UNIT=dev, FILE='outputfolder/outputaid.txt', STATUS='REPLACE', ACTION='WRITE', IOSTAT=iostat)
 
       WRITE(dev, *) 'Cartesian topology'
       WRITE(dev, *) dims
