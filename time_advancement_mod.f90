@@ -5,11 +5,13 @@ USE essentials
 
 IMPLICIT NONE
 
-TYPE(block), DIMENSION(:), ALLOCATABLE :: gradp  ! block storing pressure gradients
+TYPE(block), DIMENSION(:), ALLOCATABLE :: gradp    ! block storing pressure gradients
+TYPE(block), DIMENSION(:), ALLOCATABLE :: totder   ! support block used to store sum of derivatives for RK method
 ! residuals (velocity differences)
 REAL, DIMENSION(3)                     :: vel_diff_proc       ! max velocity components differences for each process
 REAL                                   :: max_vel_diff_proc   ! max velocity difference among all components, but for each process
 REAL                                   :: vel_res             ! max difference among all components and processes (true residual)
+
 
 CONTAINS
 
@@ -37,6 +39,31 @@ CONTAINS
     END DO
 
   END SUBROUTINE set_grad_p
+
+
+  SUBROUTINE set_tot_der
+
+    !USE variables
+    USE MPI_module, ONLY: ndims
+    USE, INTRINSIC :: IEEE_ARITHMETIC ! to use IEEE routines
+
+    IMPLICIT NONE
+
+    INTEGER            :: i
+    REAL               :: r = 0.0, NaN ! r is a dummy real used to define a NaN of type real
+    NaN = IEEE_VALUE(r, IEEE_QUIET_NAN) ! NaN of the same type as r
+
+    ALLOCATE(totder(ndims))
+
+    DO i = 1, ndims
+      totder(i)%b = uvwp(i)%b
+      ALLOCATE(totder(i)%values(totder(i)%b(1, 1):totder(i)%b(1, 2), &
+                               totder(i)%b(2, 1):totder(i)%b(2, 2), &
+                               totder(i)%b(3, 1):totder(i)%b(3, 2)))
+      totder(i)%values = NaN
+    END DO
+
+  END SUBROUTINE set_tot_der
 
 
 
@@ -168,11 +195,12 @@ CONTAINS
 
 
 
-  SUBROUTINE residual_eval
+  SUBROUTINE residual_eval(dt)
 
     USE MPI
 
-    INTEGER :: i, ierr
+    INTEGER          :: i, ierr
+    REAL, INTENT(IN) :: dt
 
     DO i = 1, 3
 
@@ -184,9 +212,10 @@ CONTAINS
 
     max_vel_diff_proc = MAXVAL(vel_diff_proc)
     CALL MPI_ALLREDUCE(max_vel_diff_proc, vel_res, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_WORLD, ierr)
+    vel_res = vel_res/dt
 
 
-  END SUBROUTINE
+  END SUBROUTINE residual_eval
 
 
 
@@ -205,8 +234,13 @@ CONTAINS
     REAL, INTENT(IN) :: dt, ni
     INTEGER          :: ic
 
+    ! saving old values of flow variables
+    DO ic = 1, n_flow_variables-1
+      uvwp_old(ic)%values = uvwp(ic)%values(uvwp(ic)%b(1, 1) : uvwp(ic)%b(1, 2), &
+                                            uvwp(ic)%b(2, 1) : uvwp(ic)%b(2, 2), &
+                                            uvwp(ic)%b(3, 1) : uvwp(ic)%b(3, 2))
+    END DO
 
-    CALL SPIKE_exchange_uvw
     CALL diff_calc
     CALL conv_calc
 
@@ -240,12 +274,95 @@ CONTAINS
                                                                            uvwp(ic)%b(3, 1):uvwp(ic)%b(3, 2)) + &
                                                            ( -gradp(ic)%values)
     END DO
+    CALL SPIKE_exchange_uvw
 
 
 
   END SUBROUTINE ExplEuler
 
 
+
+  SUBROUTINE RK4(dt, ni)
+    ! Routine that calculates the velocity field at the next time step by means of
+    ! fourth order Runge-Kutta method
+
+    USE diffusive_term
+    USE convective_term
+    USE solve_pressure
+    USE SPIKE
+
+    IMPLICIT NONE
+
+    REAL, INTENT(IN)   :: dt, ni
+    INTEGER            :: ic, istg
+    REAL, DIMENSION(4) :: aa, bb
+
+    aa = [0.5, 0.5, 1., 1.]
+    bb = [1./6, 1./3, 1./3, 1./6]
+
+    ! saving old values of flow variables
+    DO ic = 1, n_flow_variables-1
+      uvwp_old(ic)%values = uvwp(ic)%values(uvwp(ic)%b(1, 1) : uvwp(ic)%b(1, 2), &
+                                            uvwp(ic)%b(2, 1) : uvwp(ic)%b(2, 2), &
+                                            uvwp(ic)%b(3, 1) : uvwp(ic)%b(3, 2))
+      totder(ic)%values = 0
+    END DO
+
+    !!!!!!!!!! Stages !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    DO istg = 1, 4
+      CALL diff_calc
+      CALL conv_calc
+
+      DO ic = 1, ndims
+        ! only internal faces must be updated
+        uvwp(ic)%values(uvwp(ic)%b(1, 1):uvwp(ic)%b(1, 2), &
+                        uvwp(ic)%b(2, 1):uvwp(ic)%b(2, 2), &
+                        uvwp(ic)%b(3, 1):uvwp(ic)%b(3, 2)) = uvwp_old(ic)%values        + &
+                                                             aa(istg)*dt*ni*diffvel(ic)%values + &
+                                                             aa(istg)*dt*( -convvel(ic)%values)
+        ! accumulating derivative values
+        totder(ic)%values = totder(ic)%values + bb(istg)*dt*(-convvel(ic)%values + ni*diffvel(ic)%values)
+      END DO
+      CALL SPIKE_exchange_uvw
+
+      !!!!!!!!!! Divergence !!!!!!!!!!
+      CALL divergence_calc
+
+      !!!!!!!!!! Pressure term !!!!!!!!!!
+      CALL Solve_p
+      CALL p_grad_calc
+
+      !!!!!!!!!! Pressure correction !!!!!!!!!!
+      DO ic = 1, ndims
+        ! only internal faces must be updated
+        uvwp(ic)%values(uvwp(ic)%b(1, 1):uvwp(ic)%b(1, 2), &
+                        uvwp(ic)%b(2, 1):uvwp(ic)%b(2, 2), &
+                        uvwp(ic)%b(3, 1):uvwp(ic)%b(3, 2)) = uvwp(ic)%values(uvwp(ic)%b(1, 1):uvwp(ic)%b(1, 2), &
+                                                                             uvwp(ic)%b(2, 1):uvwp(ic)%b(2, 2), &
+                                                                             uvwp(ic)%b(3, 1):uvwp(ic)%b(3, 2)) + &
+                                                             ( -gradp(ic)%values)
+        ! accumulating derivative values
+        totder(ic)%values = totder(ic)%values + bb(istg)*(-gradp(ic)%values)
+        CALL SPIKE_exchange_uvw
+
+
+
+      END DO
+    END DO
+
+
+    !!!!!!!!!! Final evaluation !!!!!!!!!!
+    DO ic = 1, ndims
+      ! only internal faces must be updated
+      uvwp(ic)%values(uvwp(ic)%b(1, 1):uvwp(ic)%b(1, 2), &
+                      uvwp(ic)%b(2, 1):uvwp(ic)%b(2, 2), &
+                      uvwp(ic)%b(3, 1):uvwp(ic)%b(3, 2)) = uvwp_old(ic)%values + &
+                                                           totder(ic)%values
+    END DO
+    CALL SPIKE_exchange_uvw
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  END SUBROUTINE RK4
 
 
 
