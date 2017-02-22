@@ -476,7 +476,11 @@ CALL MPI_gather(PSI, 1, MPI_2slab_type, PSI0C, 2, MPI_gather_type_res, 0, pencil
 
 
 ! just to simplify notation
-Cp => SPK(id, ider, istag)%C%matrix(2:SIZE(SPK(id, ider, istag)%C%matrix, 1)-1, :)  ! NOTE : no need for NaN rows
+if (periodic(id)) then
+    Cp => SPK(id, ider, istag)%C%matrix(:,:) ! NOTE : no need for NaN rows
+else
+    Cp => SPK(id, ider, istag)%C%matrix(2:SIZE(SPK(id, ider, istag)%C%matrix, 1)-1, :)  ! NOTE : no need for NaN rows
+end if
 
 ! depending on direction the DO cycle must be different
 SELECT CASE(id)
