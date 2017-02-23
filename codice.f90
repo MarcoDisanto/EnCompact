@@ -35,6 +35,8 @@ REAL :: dt, ni, vel_tol
 INTEGER :: sz, prova, nun
 INTEGER(MPI_ADDRESS_KIND) :: i1, i2, diff
 INTEGER :: ext1, ext2
+CHARACTER (LEN = 1024) :: strtry
+INTEGER :: wrtind, wrtfreq         ! required to output multiple times
 REAL               :: r = 0.0, NaN ! r is a dummy real used to define a NaN of type real
 NaN = IEEE_VALUE(r, IEEE_QUIET_NAN) ! NaN of the same type as r
 
@@ -154,6 +156,8 @@ CALL set_diff_bounds
 CALL set_conv_bounds
 CALL set_conv_bc
 CALL set_grad_p
+CALL set_output
+CALL set_tot_der ! call this subroutine only if multistage methods are used
 
 ! Allocation of source term in the Poisson equation
 ALLOCATE(b(indv(1,1):indv(1,2),indv(2,1):indv(2,2),indv(3,1):indv(3,2)))
@@ -171,14 +175,14 @@ DO id = 1, ndims
 
 END DO
 
-IF (myid==0) PRINT *, 'n° of processes'
-IF (myid==0) PRINT *, dims
+!IF (myid==0) PRINT *, 'n° of processes'
+!IF (myid==0) PRINT *, dims
 
 ! TODO: inserire dt e ni nel file di input e modificare il modulo di lettura in
 ! maniera opportuna
-dt = 2.5e-3
-ni = 1e-2
-vel_tol = 1e-4
+dt = 0.0104 ! C = 1
+ni = 1e-3
+vel_tol = 1e-3 ! criterio di arresto
 
 
 IF (myid==0) PRINT *, ''
@@ -186,48 +190,53 @@ IF (myid==0) PRINT *, ''
 IF (myid==0) PRINT *, ''
 IF (myid==0) PRINT *, 'Start calculating'
 
-! Time advancement
+!!!!!!!!!! Time advancement !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 i = 0
 vel_res = 1
+wrtfreq = 500 ! how often do you want to write an output file
+wrtind = 1
+CALL SPIKE_exchange_uvw ! exchanging velocity values
 t_start = MPI_Wtime()
-DO WHILE (vel_res>vel_tol .AND. i<10000)
 
-  i = i+1
-
-  ! saving old values of flow variables
-  DO j = 1, n_flow_variables-1
-    uvwp_old(j)%values = uvwp(j)%values(uvwp(j)%b(1, 1) : uvwp(j)%b(1, 2), &
-                                        uvwp(j)%b(2, 1) : uvwp(j)%b(2, 2), &
-                                        uvwp(j)%b(3, 1) : uvwp(j)%b(3, 2))
-  END DO
-
-  ! upgrading solution
-  CALL ExplEuler(dt, ni)
-
-  CALL residual_eval
-
-  IF (myid==0) PRINT *, i, '     Residual = ', vel_res
-
-END DO
+!DO WHILE (vel_res>vel_tol .AND. i<100000)
+!
+!  i = i+1
+!
+!  ! upgrading solution
+!  CALL RK4(dt, ni)
+!  !CALL ExplEuler(dt, ni)
+!
+!  CALL residual_eval(dt)
+!
+!  IF (myid==0) PRINT *, i, '     Residual = ', vel_res
+!
+!  ! Output
+!  !IF (MOD(i, wrtfreq)==0) THEN
+!  !  CALL raw_out(wrtind)
+!  !  IF (myid==0) PRINT *, 'Output written'
+!  !  wrtind = wrtind+1
+!  !END IF
+!
+!END DO
 t_end = MPI_Wtime()
-CALL SPIKE_exchange_uvw
 CALL divergence_calc
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 ! Calculating execution time
 t_exec_proc = t_end-t_start
 CALL MPI_REDUCE(t_exec_proc, t_exec, 1, MPI_DOUBLE_PRECISION, MPI_MAX, 0, MPI_COMM_WORLD, ierr)
 
 ! Output
-CALL set_output
-CALL raw_out
-
+!CALL set_output
+wrtind = 1
+!CALL raw_out(wrtind)
+!CALL output_read_aid
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 id = 1
 istag = 2
 
 iii = 0
 i = 1
-
 
 !PRINT *, 'Process', myid, '     Velocity difference =', vel_diff_proc
 
@@ -244,23 +253,6 @@ IF (myid==0) PRINT *, 'Elapsed time =', t_exec
 !IF (myid==iii) CALL printmatrix(GraDiv(i, 2)%matrix)
 !IF (myid==iii) print *, 'lapl'
 !IF (myid==iii) CALL printmatrix(Lapl(i)%matrix)
-
-
-!IF (myid==iii) PRINT *, uvwp(i)%b
-!IF (myid==iii) PRINT *, uvwp(i)%b_ol
-!IF (myid==iii) PRINT *, ''
-!
-!IF (myid==iii) PRINT *, 'A'
-!IF (myid==iii) PRINT *, cmp(id, 2, istag)%A%lb
-!IF (myid==iii) PRINT *, cmp(id, 2, istag)%A%ub
-!IF (myid==iii) CALL printmatrix(cmp(id, 2, istag)%A%matrix)
-!IF (myid==iii) PRINT *, ''
-!
-!IF (myid==iii) PRINT *, 'B'
-!IF (myid==iii) PRINT *, cmp(id, 2, istag)%B%lb
-!IF (myid==iii) PRINT *, cmp(id, 2, istag)%B%ub
-!IF (myid==iii) CALL printmatrix(cmp(id, 2, istag)%B%matrix)
-!IF (myid==iii) PRINT *, ''
 
 
 
