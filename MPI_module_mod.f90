@@ -27,6 +27,8 @@ MODULE MPI_module
     INTEGER, DIMENSION(:,:,:), ALLOCATABLE :: Neq        ! number of equations to the current process along each dimension, for each order of derivation, and for each staggering
 
     INTEGER, DIMENSION(:), ALLOCATABLE :: pencil_comm ! pencil communicators
+    INTEGER, DIMENSION(:), ALLOCATABLE :: slab_comm   ! slab communicators (BEWARE, the index defines the normal to the slab)
+
 
 CONTAINS
 
@@ -34,7 +36,7 @@ CONTAINS
     ! This procedure determines the number of processes, the rank of the current one,
     ! then creates a new communicator with a cartesian topology attached on it.
     ! Based on this cartesian communicator, the cartesian coordinates of the
-    ! current process are determined. Furthermore, the ranks of neighboring 
+    ! current process are determined. Furthermore, the ranks of neighboring
     ! processes are determined (neighborhood = left right up down front back).
 
         USE essentials, ONLY : log2int => logical2integer
@@ -54,7 +56,7 @@ CONTAINS
         CALL MPI_DIMS_CREATE(nprocs, ndims, dims, ierr)
 
         ! create the cartesian communicator (communicator with cartesian topology)
-        CALL MPI_CART_CREATE(MPI_COMM_WORLD, ndims, dims, periodic, reorder, procs_grid, ierr) 
+        CALL MPI_CART_CREATE(MPI_COMM_WORLD, ndims, dims, periodic, reorder, procs_grid, ierr)
 
         ! determine the cartesian coordinates of the current process
         ALLOCATE(mycoords(ndims))
@@ -84,6 +86,7 @@ CONTAINS
         ! containing the process itself and the other processes whose coordinates
         ! only differs in the i-th direction
         ALLOCATE(pencil_comm(ndims))
+        ALLOCATE(slab_comm(ndims))
         create_ndims_pencil_communicators: SELECT CASE (ndims)
         CASE (1)
             PRINT *, 'ERROR in MPI_module_mod.f90: per ndims == 1 non credo di aver fatto un check.'
@@ -92,14 +95,23 @@ CONTAINS
             STOP
 
         CASE (2)
+            ! pencils
             CALL MPI_CART_SUB(procs_grid, [.true., .false.], pencil_comm(1), ierr)
             CALL MPI_CART_SUB(procs_grid, [.false., .true.], pencil_comm(2), ierr)
+            ! slabs
+            CALL MPI_CART_SUB(procs_grid, [.false., .true.], slab_comm(1), ierr)
+            CALL MPI_CART_SUB(procs_grid, [.true., .false.], slab_comm(2), ierr)
 
         CASE (3)
+            ! pencils
             CALL MPI_CART_SUB(procs_grid, [.true., .false., .false.], pencil_comm(1), ierr)
             CALL MPI_CART_SUB(procs_grid, [.false., .true., .false.], pencil_comm(2), ierr)
             CALL MPI_CART_SUB(procs_grid, [.false., .false., .true.], pencil_comm(3), ierr)
-            
+            ! slabs
+            CALL MPI_CART_SUB(procs_grid, [.false., .true., .true.], slab_comm(1), ierr)
+            CALL MPI_CART_SUB(procs_grid, [.true., .false., .true.], slab_comm(2), ierr)
+            CALL MPI_CART_SUB(procs_grid, [.true., .true., .false.], slab_comm(3), ierr)
+
         CASE (4:)
             PRINT *, "ERROR in MPI_module_mod.f90: 'Cube 2: Hypercube' is a great movie!"
             CALL MPI_ABORT(MPI_COMM_WORLD, errorcode, ierr)
@@ -148,7 +160,7 @@ CONTAINS
             Neq(i, 2, 2) = N(i) - log2int(idm(i) == MPI_PROC_NULL)
 
         END DO
-        
+
         ! Now rem can be used for other purposes, and so it will be... (it will
         ! contain the remainder of the division of the number of unknowns of the
         ! various schemes by the number of processes along a direction..)
@@ -160,12 +172,12 @@ END MODULE MPI_module
             ! originariamente in distribure_cells
             ! determine the number of internal faces handled by the current process:
             ! the same, in number, as the cells ...
-            !Nfi(i) = N(i)              
+            !Nfi(i) = N(i)
             !! ... except for the first process in the case of non-periodic direction ...
             !! print *, (((mycoords(i) == 0) .AND. (periodic(i) .EQV. .FALSE.)) .eqv. (idm(i) == MPI_PROC_NULL))
-            !IF (idm(i) == MPI_PROC_NULL) THEN 
+            !IF (idm(i) == MPI_PROC_NULL) THEN
             !! ... that handles one less face (the first phisical one)
-            !    Nfi(i) = Nfi(i) - 1 
+            !    Nfi(i) = Nfi(i) - 1
             !END IF
 
             ! determine the number of total faces handled by the current process:
@@ -175,6 +187,5 @@ END MODULE MPI_module
             !! print *, (((mycoords(i) == dims(i) - 1) .AND. (periodic(i) .EQV. .FALSE.)) .eqv. (idp(i) == MPI_PROC_NULL))
             !IF (idp(i) == MPI_PROC_NULL) THEN
             !! ... that handles one more face (the last phisical one)
-            !    Nft(i) = Nft(i) + 1              
+            !    Nft(i) = Nft(i) + 1
             !END IF
-

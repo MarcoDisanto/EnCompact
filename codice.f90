@@ -150,6 +150,8 @@ CALL Set_p
 
 ! Master process deallocates grids (which have been used to set the compacts),
 ! and other stuff.
+CALL set_glob_coordinates
+CALL set_loc_coordinates
 CALL deallocate_grids
 
 CALL set_diff_bounds
@@ -175,8 +177,8 @@ DO id = 1, ndims
 
 END DO
 
-!IF (myid==0) PRINT *, 'n° of processes'
-!IF (myid==0) PRINT *, dims
+IF (myid==0) PRINT *, 'n° of processes'
+IF (myid==0) PRINT *, dims
 
 ! TODO: inserire dt e ni nel file di input e modificare il modulo di lettura in
 ! maniera opportuna
@@ -238,22 +240,35 @@ istag = 2
 iii = 0
 i = 1
 
-!PRINT *, 'Process', myid, '     Velocity difference =', vel_diff_proc
-
-
-IF (myid==0) PRINT *, ''
-IF (myid==0) PRINT *, ''
-IF (myid==0) PRINT *, ''
-IF (myid==0) PRINT *, 'Elapsed time =', t_exec
+!IF (myid==0) PRINT *, ''
+!IF (myid==0) PRINT *, ''
+!IF (myid==0) PRINT *, ''
+!IF (myid==0) PRINT *, 'Elapsed time =', t_exec
 !IF (myid==iii) CALL printmatrix(uvwp(i)%values)
 
-!IF (myid==iii) print *, 'grad'
-!IF (myid==iii) CALL printmatrix(GraDiv(i, 1)%matrix)
-!IF (myid==iii) print *, 'div'
-!IF (myid==iii) CALL printmatrix(GraDiv(i, 2)%matrix)
-!IF (myid==iii) print *, 'lapl'
-!IF (myid==iii) CALL printmatrix(Lapl(i)%matrix)
 
+!DO i = 0, nprocs-1
+!  CALL MPI_BARRIER(MPI_COMM_WORLD, ierr)
+!  IF (myid==i) PRINT *, 'myid', myid, '               equations', Neq(1, 2, 2)
+!END DO
+
+!i = 2
+!IF (myid==0) THEN
+!  PRINT *, ''
+!  j = 1
+!  PRINT *, 'x_v'
+!  CALL printmatrix(x_glob(i, j)%g)
+!
+!  PRINT *, ''
+!  j = 2
+!  PRINT *, 'y_v'
+!  CALL printmatrix(x_glob(i, j)%g)
+!
+!  PRINT *, ''
+!  j = 3
+!  PRINT *, 'z_u'
+!  CALL printmatrix(x_glob(i, j)%g)
+!END IF
 
 
 ! print MPI library version

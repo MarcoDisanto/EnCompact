@@ -92,20 +92,20 @@ CONTAINS
                 Bg = GraDiv_glob(i,2)*GraDiv_glob(i,1)
                 ! Bg%matrix(1,0) = Bg%matrix(1,0) - 1
                 ! Bg%matrix(Ntot(i),0) = Bg%matrix(Ntot(i),0) - 1
-                IF (i == 1) THEN
-                    print *, ''
-                    print *, 'divergenza'
-                    PRINT *, GraDiv_glob(i,2)%lb, GraDiv_glob(i,2)%ub
-                !    CALL printmatrix(GraDiv_glob(i,2)%matrix)
-                    print *, ''
-                    print *, 'gradiente'
-                    PRINT *, GraDiv_glob(i,1)%lb, GraDiv_glob(i,1)%ub
-                !    CALL printmatrix(GraDiv_glob(i,1)%matrix)
-                    print *, ''
-                    print *, 'laplaciano'
-                    PRINT *, Bg%lb, Bg%ub
-                !    CALL printmatrix(Bg%matrix)
-                END IF
+                !IF (i == 1) THEN
+                !    print *, ''
+                !    print *, 'divergenza'
+                !    PRINT *, GraDiv_glob(i,2)%lb, GraDiv_glob(i,2)%ub
+                !!    CALL printmatrix(GraDiv_glob(i,2)%matrix)
+                !    print *, ''
+                !    print *, 'gradiente'
+                !    PRINT *, GraDiv_glob(i,1)%lb, GraDiv_glob(i,1)%ub
+                !!    CALL printmatrix(GraDiv_glob(i,1)%matrix)
+                !    print *, ''
+                !    print *, 'laplaciano'
+                !    PRINT *, Bg%lb, Bg%ub
+                !!    CALL printmatrix(Bg%matrix)
+                !END IF
                 ! TO DO: le quattro seguenti assegnazioni vanno eliminate assieme alla
                 ! modifica da fare al modulo compact_mod.f90 e alla routine spread_CDS e
                 ! build_GraDiv_glob del presente modulo.

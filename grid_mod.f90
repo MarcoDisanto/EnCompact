@@ -26,6 +26,12 @@ MODULE grids
         TYPE(grid1D), DIMENSION(:), ALLOCATABLE :: c
     END TYPE grid3D
 
+    TYPE(grid1D), DIMENSION(:, :), ALLOCATABLE :: x_glob ! vectors of global 1D internal coordinates for every variable;
+                                                         ! NOTE: only process 0 allocates them
+                                                         ! first index : component
+                                                         ! second index: direction
+    TYPE(grid1D), DIMENSION(:, :), ALLOCATABLE :: x_loc  ! vectors of local 1D internal coordinates for every variable;
+
     TYPE(grid3D) :: m3Dfc_tot ! stands for 3 meshes (or 1 or 2, depending on
                               ! ndims), for faces and centers of cells.
     ! At this point, m3Dfc_tot%f(2)%g would access to the y-coordinates of the
@@ -165,5 +171,132 @@ CONTAINS
         END IF
 
     END SUBROUTINE deallocate_grids
+
+
+    SUBROUTINE set_glob_coordinates
+      ! This subroutine defines global internal coordinates for each component
+      ! and broadcast the
+
+      USE MPI, ONLY: MPI_DOUBLE_PRECISION, MPI_INTEGER
+      USE MPI_module, ONLY: myid, ndims, periodic, slab_comm, mycoords
+      USE essentials, ONLY: log2int=>logical2integer
+      !USE variables, ONLY: block, uvwp
+
+      INTEGER :: i, j
+      INTEGER :: ierr
+      INTEGER, DIMENSION(:, :), ALLOCATABLE :: dmn ! this one is used to allocate x_glob%g
+
+      ! Pencil master receive info on coordinate array size
+      ALLOCATE(dmn(ndims, ndims))
+      dmn = 0
+      DO i = 1, ndims
+        DO j = 1, ndims
+          IF (myid==0) THEN
+            IF (j == i) THEN
+              dmn(i, j) = SIZE(m3Dfc_tot%f(j)%g)-1-log2int(.NOT.periodic(j))
+            ELSE
+              dmn(i, j) = SIZE(m3Dfc_tot%c(j)%g)
+            END IF
+          END IF
+          CALL MPI_BCAST(dmn(i, j), 1, MPI_INTEGER, 0, slab_comm(j), ierr)
+        END DO
+      END DO
+
+
+      ! allocate array of 1D vectors containing global internal coordinates
+      ALLOCATE(x_glob(ndims, ndims))
+      DO i = 1, ndims
+        DO j = 1, ndims
+
+          ! Pencil masters allocate x_glob%g
+          IF (mycoords(j)==0) THEN
+            ALLOCATE(x_glob(i, j)%g(dmn(i, j)))
+          END IF
+
+          ! Process 0 calculates coordinate arrays
+          IF (myid==0) THEN
+            IF (j == i) THEN
+              x_glob(i, j)%g = m3Dfc_tot%f(j)%g(2-log2int(periodic(j)) : SIZE(m3Dfc_tot%f(j)%g)-1)
+            ELSE
+              x_glob(i, j)%g = m3Dfc_tot%c(j)%g
+            END IF
+          END IF
+
+        END DO
+      END DO
+
+      ! Global coordinate x_glob(i, j) is broadcasted to pencil masters
+      DO i = 1, ndims
+        DO j = 1, ndims
+          IF (mycoords(j)==0) THEN
+            CALL MPI_BCAST(x_glob(i, j)%g, SIZE(x_glob(i, j)%g), MPI_DOUBLE_PRECISION, 0, slab_comm(j), ierr)
+          END IF
+        END DO
+      END DO
+
+      ! allocate array of 1D vectors containing local internal coordinates
+      ALLOCATE(x_loc(ndims, ndims))
+
+    END SUBROUTINE set_glob_coordinates
+
+
+
+    SUBROUTINE set_loc_coordinates
+      ! This subroutine would be more fit to lie in grids module. However, in order
+      ! to avoid loops, it had to be placed here. It calculates local internal
+      ! coordinates for each variable.
+
+      USE MPI_module, ONLY: N, ndims, Neq, dims, mycoords, pencil_comm, myid, idm
+      USE MPI, ONLY: MPI_INTEGER, MPI_DOUBLE_PRECISION, MPI_PROC_NULL
+      USE essentials, ONLY: log2int=>logical2integer, KronDelta
+
+      IMPLICIT NONE
+
+      INTEGER :: ic, id, ip, ierr
+      INTEGER, DIMENSION(:), ALLOCATABLE :: nd ! number of internal variables along a given direction
+                                               ! lenght equal to n° of processes along direction
+                                               ! only pencil masters allocate it
+      INTEGER :: nc ! number of internal variables for a specific component
+      INTEGER, DIMENSION(:), ALLOCATABLE :: displ ! displacements required by SCATTERV
+
+      ! each local coordinates vector is allocated using bound taken from uvwp so
+      ! as to avoid any recalculation
+      DO ic = 1, ndims
+        DO id = 1, ndims
+          ALLOCATE(x_loc(ic, id)%g(1 + KronDelta(id,ic)*log2int(idm(id) == MPI_PROC_NULL) : N(id)))
+        END DO
+      END DO
+
+      directions: DO id = 1, ndims
+
+        ALLOCATE(nd(0 : dims(id)-1))
+        ALLOCATE(displ(0 : dims(id)-1))
+        nd = 0
+        displ = 0
+
+        components: DO ic = 1, ndims
+
+          nc = Neq(id, 2, 1 + log2int(ic==id))
+          CALL MPI_GATHER(nc, 1, MPI_INTEGER, nd, 1, MPI_INTEGER, 0, pencil_comm(id), ierr)
+
+          IF (mycoords(id) == 0) THEN
+            DO ip = 1, dims(id)-1
+              displ(ip) = displ(ip-1) + nd(ip-1)
+            END DO
+          END IF
+          CALL MPI_SCATTERV(x_glob(ic, id)%g, nd, displ, MPI_DOUBLE_PRECISION, &
+                            x_loc(ic, id)%g,  nc, MPI_DOUBLE_PRECISION, 0, &
+                            pencil_comm(id), ierr)
+          IF (mycoords(id)==0 .AND. id==3 .AND. ic==3) PRINT *, myid, x_loc(ic, id)%g
+
+
+        END DO components
+
+        DEALLOCATE(nd)
+        DEALLOCATE(displ)
+      END DO directions
+
+    END SUBROUTINE set_loc_coordinates
+
 
 END MODULE grids
