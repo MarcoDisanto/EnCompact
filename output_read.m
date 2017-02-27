@@ -13,10 +13,10 @@ nprocs = prod(cart_top);
 procgrid = zeros(cart_top(1), cart_top(2), cart_top(3));
 % procgrid(:) = 1:nprocs;     % ATTENZIONE: qui i processori vanno da 1 a nprocs
 
-for k = 1 : cart_top(1)
+for i = 1 : cart_top(1)
     for j = 1 : cart_top(2)
-        for i = 1 : cart_top(3)
-            procgrid(i, j, k) = (i-1)*cart_top(1)*cart_top(2) + (j-1)*cart_top(2) + k;
+        for k = 1 : cart_top(3)
+            procgrid(i, j, k) = (i-1)*cart_top(2)*cart_top(3) + (j-1)*cart_top(3) + k;
         end
     end
 end
@@ -208,81 +208,24 @@ yw(2:end-1) = linspace(dy/2, L(2)-dy/2, size(W, 2)-2);
 zw = linspace(0, L(3), size(W, 3));
 
 
-%%%%%%%%%% p %%%%%%%%%%
-
-xp = zeros(1, size(P, 1));
-dx = L(1)/(size(U, 1)-1);
-xp = linspace(dx/2, L(1)-dx/2, size(P, 1));
-
-yp = zeros(1, size(P, 2));
-dy = L(2)/(size(V, 2)-1);
-yp = linspace(dy/2, L(2)-dy/2, size(P, 2));
-
-zp = zeros(1, size(P, 3));
-dz = L(3)/(size(W, 3)-1);
-zp = linspace(dz/2, L(3)-dz/2, size(P, 3));
 
 
 
 %% Graphics %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
-nz = floor(size(P, 3)/2);
-Pg = P(:, :, nz);
+nx = ceil(size(U, 1)/2);
+ny = ceil(size(U, 2)/2);
+nz = ceil(size(U, 3)/2);
+
 
 figure
-[tempy,tempx] = meshgrid(yp,xp);
-contourf(tempx,tempy,Pg), xlabel('x'), ylabel('y')%, zlabel('p')
-
-
-nx = floor(size(U, 1)/2);
-nz = floor(size(U, 3)/2);
-
-% [Yu, Xu] = meshgrid(yu, xu);
-
-figure
-plot(U(nx, :, nz), yu, 'k'); hold on;
-% plot(U(nx, :, 16), yu, 'r');
-plot(U(nx, :, 8), yu, 'b');
-plot(U(nx, :, 4), yu, 'g');
-xlim([-1, 1]);
-xlabel('u');
-ylabel('y');
-
-ny = floor(size(V, 1)/2);
-nz = floor(size(V, 3)/2);
-
-figure
-plot(xv, V(:, ny, nz), 'k'); hold on;
-xlabel('x');
-ylabel('v');
-
-
-% nz = floor(size(W, 3)/2);
-% nz = 2
-% 
-% [Xw, Yw, Zw] = meshgrid(xw, yw, zw);
-% 
-% figure
-% surf(Xw(:, :, nz), Yw(:, :, nz), W(:, :, nz)); shading interp;
-
-
-% nx = floor(size(U, 1)/2);
-% 
-% [Xu, Yu, Zu] = meshgrid(xu, yu, zu);
-% 
-% 
-% figure
-% surf(Yu(nx, :, :), Zu(nx, :, :), U(nx, :, :));
-
-
-
-
-
-
-
-
-
+for i = 1 : size(W, 3)
+    contourf(W(:, :, i));
+    title(num2str(i));
+    drawnow;
+    pause();
+end
 
 
 
