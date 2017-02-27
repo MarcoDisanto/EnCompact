@@ -27,10 +27,10 @@ MODULE grids
     END TYPE grid3D
 
     TYPE(grid1D), DIMENSION(:, :), ALLOCATABLE :: x_glob ! vectors of global 1D internal coordinates for every variable;
+    TYPE(grid1D), DIMENSION(:, :), ALLOCATABLE :: x_loc  ! vectors of local 1D internal coordinates for every variable;
                                                          ! NOTE: only process 0 allocates them
                                                          ! first index : component
                                                          ! second index: direction
-    TYPE(grid1D), DIMENSION(:, :), ALLOCATABLE :: x_loc  ! vectors of local 1D internal coordinates for every variable;
 
     TYPE(grid3D) :: m3Dfc_tot ! stands for 3 meshes (or 1 or 2, depending on
                               ! ndims), for faces and centers of cells.
@@ -287,7 +287,6 @@ CONTAINS
           CALL MPI_SCATTERV(x_glob(ic, id)%g, nd, displ, MPI_DOUBLE_PRECISION, &
                             x_loc(ic, id)%g,  nc, MPI_DOUBLE_PRECISION, 0, &
                             pencil_comm(id), ierr)
-          IF (mycoords(id)==0 .AND. id==3 .AND. ic==3) PRINT *, myid, x_loc(ic, id)%g
 
 
         END DO components

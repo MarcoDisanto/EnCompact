@@ -178,37 +178,82 @@ CONTAINS
     END SUBROUTINE set_face_condition
 
 
-    SUBROUTINE set_ic
+    SUBROUTINE set_ic(choice)
     ! This subroutine sets the initial condition in terms of initial velocity
     ! (the initial pressure is non-sense in the context of a pressure
     ! projection method).
     ! TO DO: in a future, I could implement a conditional to retrieve the
     ! initial conditions from file.
 
-        USE MPI,       ONLY : MPI_PROC_NULL
-        USE variables, ONLY : uvwp, n_flow_variables
-        USE MPI_module, ONLY: myid, N, idm, idp
+        USE MPI,        ONLY : MPI_PROC_NULL, MPI_COMM_WORLD, MPI_ERRORS_RETURN
+        USE variables,  ONLY : uvwp, n_flow_variables
+        USE MPI_module, ONLY : myid, N, idm, idp
         USE essentials, ONLY : log2int => logical2integer, KronDelta
+        USE grids,      ONLY : grid1D, x => x_loc, L
         USE, INTRINSIC :: IEEE_ARITHMETIC ! to use IEEE routines
         ! such as IEEE_QUIET_NAN, IEEE_POSITIVE_INF, IEEE_NEGATIVE_INF
 
         IMPLICIT NONE
 
+        ! input variables
+        CHARACTER(LEN = *) :: choice
+
         ! internal variables
-        INTEGER :: iv ! generic index
+        INTEGER :: i, j, k, iv, ierr
+        INTEGER :: nv = 2 ! number of vortices along each of the 2 or 3 dimension
+        REAL :: pi = ACOS(-1.0)
 
         ! IEEE
         REAL :: r = 0.0, NaN ! r is a dummy real used to define a NaN of type real
         NaN = IEEE_VALUE(r, IEEE_QUIET_NAN) ! NaN of the same type as r
 
-        zero_ic: DO iv = 1, n_flow_variables-1
+        SELECT CASE (choice)
 
-            uvwp(iv)%values = NaN
-            uvwp(iv)%values(uvwp(iv)%b(1,1):uvwp(iv)%b(1,2), &
-                          & uvwp(iv)%b(2,1):uvwp(iv)%b(2,2), &
-                          & uvwp(iv)%b(3,1):uvwp(iv)%b(3,2)) = 0*myid
+            CASE ('TGV') ! hypotesis: L(1) = L(2) = L(3)
 
-        END DO zero_ic
+                IF (L(1) /= L(2) .OR. L(2) /= L(3)) THEN
+                    PRINT *, 'ERROR in ic_and_bc_mod.f90: The TGV initial condition require L(1) == L(2) == L(3).'
+                    CALL MPI_ABORT(MPI_COMM_WORLD, MPI_ERRORS_RETURN, ierr)
+                END IF
+
+                DO i = uvwp(1)%b(1,1), uvwp(1)%b(1,2)
+                    DO j = uvwp(1)%b(2,1), uvwp(1)%b(2,2)
+                        DO k = uvwp(1)%b(3,1), uvwp(1)%b(3,2)
+                            uvwp(1)%values(i,j,k) = +.5 &
+                             *(sqrt(3.0)*cos(nv*2*pi/L(1)*x(1,1)%g(i))*sin(nv*2*pi/L(1)*x(1,2)%g(j))*sin(nv*2*pi/L(1)*x(1,3)%g(k)) &
+                                       + sin(nv*2*pi/L(1)*x(1,1)%g(i))*cos(nv*2*pi/L(1)*x(1,2)%g(j))*cos(nv*2*pi/L(1)*x(1,3)%g(k)))
+                        END DO
+                    END DO
+                END DO
+                DO i = uvwp(2)%b(1,1), uvwp(2)%b(1,2)
+                    DO j = uvwp(2)%b(2,1), uvwp(2)%b(2,2)
+                        DO k = uvwp(2)%b(3,1), uvwp(2)%b(3,2)
+                            uvwp(2)%values(i,j,k) = -.5 &
+                             *(sqrt(3.0)*sin(nv*2*pi/L(1)*x(2,1)%g(i))*cos(nv*2*pi/L(1)*x(2,2)%g(j))*sin(nv*2*pi/L(1)*x(2,3)%g(k)) &
+                                       + cos(nv*2*pi/L(1)*x(2,1)%g(i))*sin(nv*2*pi/L(1)*x(2,2)%g(j))*cos(nv*2*pi/L(1)*x(2,3)%g(k)))
+                        END DO
+                    END DO
+                END DO
+                DO i = uvwp(3)%b(1,1), uvwp(3)%b(1,2)
+                    DO j = uvwp(3)%b(2,1), uvwp(3)%b(2,2)
+                        DO k = uvwp(3)%b(3,1), uvwp(3)%b(3,2)
+                            uvwp(3)%values(i,j,k) = &
+                                       cos(nv*2*pi/L(1)*x(3,1)%g(i))*cos(nv*2*pi/L(1)*x(3,2)%g(j))*sin(nv*2*pi/L(1)*x(3,3)%g(k))
+                        END DO
+                    END DO
+                END DO
+
+            CASE DEFAULT
+                zero_ic: DO iv = 1, n_flow_variables-1
+
+                    uvwp(iv)%values = NaN
+                    uvwp(iv)%values(uvwp(iv)%b(1,1):uvwp(iv)%b(1,2), &
+                                  & uvwp(iv)%b(2,1):uvwp(iv)%b(2,2), &
+                                  & uvwp(iv)%b(3,1):uvwp(iv)%b(3,2)) = 0
+
+                END DO zero_ic
+
+        END SELECT
 
     END SUBROUTINE set_ic
 

@@ -59,7 +59,10 @@ CALL distribute_cells
 ! The master process sets the grids (such grids are allocated only by the master
 ! process, since they are used only to build the matrices of the compact scheme.
 ! After this, they can also be deallocated).
+! TODO: improve the preceding comment
 CALL set_grids
+CALL set_glob_coordinates
+CALL set_loc_coordinates
 
 ! The master process builds the matrices of compact schemes, then it scatters them
 ! among other processes.
@@ -70,7 +73,7 @@ CALL set_compacts
 CALL set_variables
 
 ! The current process sets an initial condition.
-CALL set_ic
+CALL set_ic('TGV')
 
 ! The current process sets the boundary condition (if it touches any boundary).
 CALL set_bc
@@ -150,8 +153,6 @@ CALL Set_p
 
 ! Master process deallocates grids (which have been used to set the compacts),
 ! and other stuff.
-CALL set_glob_coordinates
-CALL set_loc_coordinates
 CALL deallocate_grids
 
 CALL set_diff_bounds
@@ -200,26 +201,26 @@ wrtind = 1
 CALL SPIKE_exchange_uvw ! exchanging velocity values
 t_start = MPI_Wtime()
 
-!DO WHILE (vel_res>vel_tol .AND. i<100000)
-!
-!  i = i+1
-!
-!  ! upgrading solution
-!  CALL RK4(dt, ni)
-!  !CALL ExplEuler(dt, ni)
-!
-!  CALL residual_eval(dt)
-!
-!  IF (myid==0) PRINT *, i, '     Residual = ', vel_res
-!
-!  ! Output
-!  !IF (MOD(i, wrtfreq)==0) THEN
-!  !  CALL raw_out(wrtind)
-!  !  IF (myid==0) PRINT *, 'Output written'
-!  !  wrtind = wrtind+1
-!  !END IF
-!
-!END DO
+DO WHILE (vel_res > vel_tol .AND. i < 0)
+
+  i = i+1
+
+  ! upgrading solution
+  CALL RK4(dt, ni)
+  !CALL ExplEuler(dt, ni)
+
+  CALL residual_eval(dt)
+
+  IF (myid==0) PRINT *, i, '     Residual = ', vel_res
+
+  ! Output
+  !IF (MOD(i, wrtfreq)==0) THEN
+  !  CALL raw_out(wrtind)
+  !  IF (myid==0) PRINT *, 'Output written'
+  !  wrtind = wrtind+1
+  !END IF
+
+END DO
 t_end = MPI_Wtime()
 CALL divergence_calc
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -229,10 +230,9 @@ t_exec_proc = t_end-t_start
 CALL MPI_REDUCE(t_exec_proc, t_exec, 1, MPI_DOUBLE_PRECISION, MPI_MAX, 0, MPI_COMM_WORLD, ierr)
 
 ! Output
-!CALL set_output
 wrtind = 1
-!CALL raw_out(wrtind)
-!CALL output_read_aid
+CALL raw_out(wrtind)
+CALL output_read_aid
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 id = 1
 istag = 2
@@ -240,35 +240,17 @@ istag = 2
 iii = 0
 i = 1
 
+!PRINT *, SIZE(uvwp(i)%values(uvwp(i)%b_bc(1, 1) : uvwp(i)%b_bc(1, 2), &
+!                             uvwp(i)%b_bc(2, 1) : uvwp(i)%b_bc(2, 2), &
+!                             uvwp(i)%b_bc(3, 1) : uvwp(i)%b_bc(3, 2)))
+
+
 !IF (myid==0) PRINT *, ''
 !IF (myid==0) PRINT *, ''
 !IF (myid==0) PRINT *, ''
 !IF (myid==0) PRINT *, 'Elapsed time =', t_exec
 !IF (myid==iii) CALL printmatrix(uvwp(i)%values)
 
-
-!DO i = 0, nprocs-1
-!  CALL MPI_BARRIER(MPI_COMM_WORLD, ierr)
-!  IF (myid==i) PRINT *, 'myid', myid, '               equations', Neq(1, 2, 2)
-!END DO
-
-!i = 2
-!IF (myid==0) THEN
-!  PRINT *, ''
-!  j = 1
-!  PRINT *, 'x_v'
-!  CALL printmatrix(x_glob(i, j)%g)
-!
-!  PRINT *, ''
-!  j = 2
-!  PRINT *, 'y_v'
-!  CALL printmatrix(x_glob(i, j)%g)
-!
-!  PRINT *, ''
-!  j = 3
-!  PRINT *, 'z_u'
-!  CALL printmatrix(x_glob(i, j)%g)
-!END IF
 
 
 ! print MPI library version
