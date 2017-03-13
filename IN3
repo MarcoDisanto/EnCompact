@@ -3,7 +3,7 @@
 # number of dimensions (1, 2, or 3)
 ndims   3 # DO NOT MOVE (this MUST be the first readable line)
 # domain length along each dimension (ndims real numbers)
-lengths        1       1       5
+lengths        1       1       1
 # periodicity along each dimension (ndims 0s or 1s)
 periodic       0       0       0
 # boundary conditions

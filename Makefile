@@ -5,7 +5,7 @@
 # The compiler
 FC = mpifort
 # Flags for debugging or for maximum performance
-FCFLAGS = -g -O0 -Waliasing -Wampersand -Wcharacter-truncation -Wsurprising -fimplicit-none -fbacktrace -fdefault-real-8
+FCFLAGS = -g -O0 -Waliasing -Wampersand -Wcharacter-truncation -Winteger-division -Wsurprising -fimplicit-none -fcheck=no-array-temps -fbacktrace -fdefault-real-8
 FLIBS   = -llapack -lblas
 
 # List of executables to be built within the package
